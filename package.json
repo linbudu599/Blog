@@ -1,0 +1,25 @@
+{
+  "name": "vuepress-blog",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vuepress dev src",
+    "build": "vuepress build src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/linbudu599/linbudu599.github.io.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/linbudu599/linbudu599.github.io/issues"
+  },
+  "homepage": "https://github.com/linbudu599/linbudu599.github.io#readme",
+  "dependencies": {
+    "vuepress": "^1.1.0",
+    "vuepress-theme-meteorlxy": "^1.5.1"
+  }
+}
