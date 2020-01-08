@@ -83,12 +83,13 @@ module.exports = {
     },
     //导航栏配置
     nav: [
-      { text: "主页", link: "/" },
+      { text: "主页", link: "/", exact: true },
       {
         text: "往期博文",
-        link: "/posts/"
+        link: "/posts/",
+        exact: false
       },
-      { text: "关于我", link: "/about/" }
+      { text: "关于我", link: "/about/", exact: false }
     ],
     comments: {
       platform: "github",
