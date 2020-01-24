@@ -9,6 +9,14 @@ module.exports = {
     }
   },
   theme: "meteorlxy",
+  plugins: [
+    [
+      "@vuepress/google-analytics",
+      {
+        ga: "UA-156898689-1"
+      }
+    ]
+  ],
   head: [
     // [tagName, { attrName: attrValue }, innerHTML?]
     ["link", { rel: "icon", href: "." }],
