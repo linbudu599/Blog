@@ -8,7 +8,9 @@ title: 关于useSelector的一些学习
 
 ## 前言
 
-又懒又忙的我会突然为`useSelector`整理一篇博文，是因为之前的我使用它，就是直接用而已，完全不考虑它替我们做了什么，和 connect 比起来又有什么好处，以及它是如何发扬 Hooks 的哲学的，直到前几天认真看了下官方文档，才发现好像我之前的使用过于浅显，我很不喜欢这种感觉，正好也将近一个月没写过博客了，于是就趁此机会做一下记录。
+又懒又忙的我会突然为`useSelector`整理一篇博文，是因为之前的我使用它，就是直接用而已，完全不考虑它替我们做了什么，和 connect 比起来又有什么好处，以及它是如何发扬 Hooks 的哲学的，直到前几天偶然看见一篇文章，又去研究了下官方文档，才发现好像我之前的使用过于浅显，我很不喜欢这种感觉，正好也将近一个月没写过博客了，于是就趁此机会做一下记录。
+
+这篇文章大部分思路和示例来自于知乎作者[张立理](https://www.zhihu.com/people/otakustay)，是和贺师俊、杨健等等前端领域同一批次的大佬。也正是作者的讲解让我对这个 api 产生了兴趣。
 
 ## React-Redux 与 Reselect
 
@@ -83,7 +85,7 @@ export const getVisibleTodos = createSelector(
 
 ~~也许是因为这个思路是大势所趋，`React-Redux@7`推出了`useSelector`这个方法。~~
 
-为什么要划掉呢，因为这个方法和`reselect`其实关联甚少，最重要的是它没有缓存功能。会有这篇文章也是因为我在探究如何享受`useSelector`的便利同时让缓存机制保护我的应用。
+为什么要划掉呢，因为这个方法和`reselect`其实关联甚少，最重要的是它的缓存功能太弱了（参看下文），试问，谁不想享受`useSelector`的便利同时让缓存机制保护我们的应用呢？
 
 ## useSelector
 
@@ -133,7 +135,7 @@ const selectUserDisplay = createSelector(
 const user = useSelector(selectUserDisplay);
 ```
 
-上面和以下示例来自于知乎的参考文章：
+上面和以下示例来自于张老师的文章：
 
 > 当你需要根据组件自己的 state 或 props 去访问 store 的时候，这么实现（指上面的例子）显然是不行的，所以你需要 useCallback：
 
@@ -160,7 +162,7 @@ const user = useSelector(selectUserDisplay);
 
 > 不同于普通的纯函数，createSelector 是有开销的，包括组装函数的时间开销，以及开辟一个内部缓存的空间开销。useCallback 虽然能稳定返回的函数，但并不减少 createSelector 的调用次数，只是一部分调用所返回的结果被直接丢弃，等着 GC 回收。但是，GC 是性能的大敌，从 Immutable 到 useCallback 产生的碎片，这是整个 React 当前的性能模型所未能解决的问题。
 
-其实这篇文章大部分思路和示例来自于知乎作者[张立理](https://www.zhihu.com/people/otakustay)，是和贺师俊、杨健等等前端领域同一批次的大佬。也正是作者的讲解让我对这个 api 产生了兴趣。
+其实
 
 作者提供了他认为最优的方案：
 
@@ -180,15 +182,51 @@ const userDisplay = useMemo(() => {
 
 （其实我也没能想到 useMemo 还能这么用。）
 
-这种思路使得细粒度筛选 store 和良好缓存能力很好的共存了，而且也能使用组件内部的状态/属性来参与筛选。我愿称之为妙！（希望我也尽快达到这种程度。）
+这种思路使得细粒度筛选 store 和良好缓存能力很好的共存了，而且也能使用组件内部的状态/属性来参与筛选。我愿称之为妙！
+
+同时注意，你可以会发现我们还可以传入另外一个参数，react-redux 提供的`shallowEqual()`，或是 Immutable.js/Lodash 提供的方法。这个参数会作为比较两次调用结果的计算函数。
 
 ## 场景
 
 实际上现在我们有两种方案，当组件单纯连接到 store，并且提取数据不需要使用组件内部状态，那么 createSelector 会是不错的选择（注意，createSelector 本身也是有开销的）。当提取数据需要更细粒度，并且过程依赖组件属性/状态，那么像这种 useMemo 的搭配会更好。
 
+## 彩蛋
+
+react-redux@7 并不是只提供了这一个 hooks，下面会简单介绍一下我使用/了解过的 hooks。
+
+### useDispatch
+
+如果说 useSelector 是为了替代 mapStateToProps，那么 useDispatch 就是为了替代 mapDispatchToProps，这两个一起使用以后，connect 就可以正式退休了。
+
+我个人理解，useDispatch 实际上就是返回了之前 mapDispatchToProps 的入参中的 diapatch 引用，使得现在可以直接在组件内部 dispatch 一个 action，但组件的属性中不需要有 dispatch。
+
+```js
+import React from "react";
+import { useDispatch } from "react-redux";
+
+export const CounterComponent = ({ value }) => {
+  const dispatch = useDispatch();
+
+  return (
+    <div>
+      <span>{value}</span>
+      <button onClick={() => dispatch({ type: "increment-counter" })}>
+        Increment counter
+      </button>
+    </div>
+  );
+};
+```
+
+注意，如果你将一个内部调用了此类 dispatch 的函数传给子组件，最好把它用`useCallback`包裹起来，以避免不必要的重渲染。
+
+### useStore
+
+通过这个 API，你现在可以直接访问到 Redux 的根 Store 了，一个比较可能用到这个 api 的场景就是在替换 store 的 reducer，比如 MPA 应用做热更新。
+
 ## 浅比较和深比较
 
-看了一下 React-Redux 提供的`ShallowEuqal`API 的源码，和 React 内部`shouldComponentUpdate`生命周期里的`ShallowEuqal`实现思路大致相同，这里贴以下 React 中的实现：
+看了一下 React-Redux 提供的`ShallowEuqal`API 的源码，和 React 内部`shouldComponentUpdate`生命周期里的`ShallowEuqal`实现思路几乎一样，代码也差不多，这里贴一下 React 中的实现：
 
 ```js
 const hasOwn = Object.prototype.hasOwnProperty;
