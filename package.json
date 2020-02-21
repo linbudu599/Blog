@@ -20,6 +20,7 @@
   "homepage": "https://github.com/linbudu599/linbudu599.github.io",
   "dependencies": {
     "now": "^16.7.1",
+    "react-redux": "^7.2.0",
     "vuepress": "^1.1.0",
     "vuepress-theme-meteorlxy": "^1.5.1"
   },
