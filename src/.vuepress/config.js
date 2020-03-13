@@ -27,32 +27,19 @@ module.exports = {
         content: "width=device-width, initial-scale=1.0, user-scalable=no"
       }
     ]
-    // ["meta", { charset: "UTF-8" }]
-    // ['link', { rel: 'manifest', href: '/manifest.json' }],
   ],
-  // base: "./",
-  //host:dev server的主机名
   host: "localhost",
-  //端口名
   port: "9999",
-  //dest vuepress build的输出目录
   dest: "./dist",
-  //extraWatchFiles,指定额外的需要被监听的文件。
-  // 你可以监听任何想监听的文件，文件变动将会触发
-  // vuepress 重新构建，并实时更新。
-  extraWatchFiles: [],
-
-  //主题配置
-
   themeConfig: {
     lang: "zh-CN",
     personalInfo: {
-      nickname: "Penumera",
+      nickname: "Penumbra",
       description: "未来的不可知，是前进的原动力",
       email: "linbudu@qq.com",
-      avatar: "![](https://linbudu-img-store.oss-cn-shenzhen.aliyuncs.com/img/48507806.jfif)",
+      avatar:
+        "https://linbudu-img-store.oss-cn-shenzhen.aliyuncs.com/img/48507806.jfif",
       sns: {
-        // Github 帐号和链接
         github: {
           account: "Linbudu",
           link: "https://github.com/linbudu599"
@@ -76,7 +63,7 @@ module.exports = {
       powerdBy: true,
       powerdByTheme: true,
       custom:
-        'Copyright 2019-present <a href="https://github.com/linbudu599" target="_blank">不渡</a> | MIT License'
+        '©Copyright 2019-2021 <a href="https://github.com/linbudu599" target="_blank">Penumbra</a> | <a href="http://www.beian.miit.gov.cn/?spm=a2c4g.11186623.2.31.35e37243qB3txy" target="_blank">闽ICP备19021283号-2</>'
     },
     infoCard: {
       // 卡片 header 的背景，可以使用图片，或者随机变化的图案（geopattern）
