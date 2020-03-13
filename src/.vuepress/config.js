@@ -1,7 +1,7 @@
 module.exports = {
-  title: "林不渡",
+  title: "Penumera",
   serviceWorker: true,
-  description: "Linbudu's Blog",
+  description: "Penumera's Blog",
   //额外的需要被注入到当前页面<head>中的标签
   locales: {
     "/": {
@@ -47,10 +47,10 @@ module.exports = {
   themeConfig: {
     lang: "zh-CN",
     personalInfo: {
-      nickname: "林不渡",
+      nickname: "Penumera",
       description: "未来的不可知，是前进的原动力",
       email: "linbudu@qq.com",
-      avatar: "https://linbudu.top/assets/img/icon1.png",
+      avatar: "![](https://linbudu-img-store.oss-cn-shenzhen.aliyuncs.com/img/48507806.jfif)",
       sns: {
         // Github 帐号和链接
         github: {
