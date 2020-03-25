@@ -1,7 +1,7 @@
 module.exports = {
-  title: "Penumera",
+  title: "Penumbra",
   serviceWorker: true,
-  description: "Penumera's Blog",
+  description: "Penumbra's Blog",
   //额外的需要被注入到当前页面<head>中的标签
   locales: {
     "/": {
