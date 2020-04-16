@@ -207,7 +207,146 @@ Invoke Function: {"headers":{"access-control-expose-headers":"Date,x-fc-request-
 
 > 与OSS/云数据库等内网服务协作
 
-待更新
+在这一节开始前, 你需要先了解 **触发器** 的概念, 假设你并不想每次都去手动用SDK调用云函数, 而是想让特定事件发生时自动触发这个函数并依据配置&入参进行调用, 并返回结果. 以OSS触发器为例, 你可以设置在一张图片被用户上传到OSS存储桶时自动调用预先设定好的某个函数, 这个函数会下载本次上传的图片, 并进行处理后将结果存入另外一个存储桶. 这个过程完全不需要你手动进行任何一步.
+
+### 触发器的基本信息
+
+- `triggerName`, 触发器名称
+- `triggerType`, 类型, 如oss/timer/http
+- `sourceArn`, 资源描述符, 如上面的OSS触发器需要格式为 `acs:oss:region:accountId:bucketName`来正确获得权限与信息.
+- `invocationRole`, 触发角色, 触发器事件源需要扮演一个角色来执行函数, 这个角色的权限关系到云函数的权限.
+- `qualifier`, 别名/版本
+- `triggerConfig`, 触发器配置信息 
+
+### OSS触发器实例
+
+> 本例设置当预设的存储桶指定目录下新增上传照片时, 打印本次信息
+
+首先新建存储桶及`source`目录, 确保函数与存储桶地域相同, 否则无法设置触发器
+
+![](https://linbudu-img-store.oss-cn-shenzhen.aliyuncs.com/img/TIM截图20200416130428.png)
+
+这样配置的事件即为**该存储桶的`/source`目录下有新文件对象变动时**, 触发该函数.
+
+接下来我们写一个函数, 它能够将图片裁剪成指定尺寸, 并调用OSS的SDK新建一个目录存放结果.
+
+```js
+ 'use strict';
+ console.log('Loading function ...');
+ var oss = require('ali-oss').Wrapper;
+ var fs = require('fs');
+ var jimp = require("jimp");
+ module.exports.resize = function (eventBuf, ctx, callback) {
+     console.log('Received event:', eventBuf.toString());
+     var event = JSON.parse(eventBuf);
+     var ossEvent = event.events[0];
+     // Required by OSS sdk: OSS region is prefixed with "oss-", e.g. "oss-cn-shanghai"
+     var ossRegion = "oss-" + ossEvent.region;
+     // Create oss client.
+     var client = new oss({
+         region: ossRegion,
+         // Credentials can be retrieved from context
+         accessKeyId: ctx.credentials.accessKeyId,
+         accessKeySecret: ctx.credentials.accessKeySecret,
+         stsToken: ctx.credentials.securityToken
+     });
+     // Bucket name is from OSS event
+     client.useBucket(ossEvent.oss.bucket.name);
+     // Processed images will be saved to processed/
+     var newKey = ossEvent.oss.object.key.replace("source/", "processed/");
+     var tmpFile = "/tmp/processed.png";
+     // Get object
+     console.log('Getting object: ', ossEvent.oss.object.key)
+     client.get(ossEvent.oss.object.key).then(function (val) {
+         // Read object from buffer
+         jimp.read(val.content, function (err, image) {
+             if (err) {
+                 console.error("Failed to read image");
+                 callback(err);
+                 return;
+             }
+             // Resize the image and save it to a tmp file
+             image.resize(128, 128).write(tmpFile, function (err) {
+                 if (err) {
+                     console.error("Failed to write image locally");
+                     callback(err);
+                     return;
+                 }
+                 // Putting object back to OSS with the new key
+                 console.log('Putting object: ', newKey);
+                 client.put(newKey, tmpFile).then(function (val) {
+                     console.log('Put object:', val);
+                     callback(null, val);
+                     return;
+                 }).catch(function (err) {
+                     console.error('Failed to put object: %j', err);
+                     callback(err);
+                     return
+                 });
+             });
+         });
+     }).catch(function (err) {
+         console.error('Failed to get object: %j', err);
+         callback(err);
+         return
+     });
+ }; 
+```
+
+(上传第三方依赖请参见下一小节)
+
+你可以在控制台中创建一个mock用的OSS事件源, 信息如下
+
+```json
+{
+  "events": [
+    {
+      "eventName": "ObjectCreated:PutObject",
+      "eventSource": "acs:oss",
+      "eventTime": "2017-04-21T12:46:37.000Z",
+      "eventVersion": "1.0",
+      "oss": {
+        "bucket": {
+          "arn": "acs:oss:<region>:<accountID>:<bucket name>",
+          "name": "<bucket name>",
+          "ownerIdentity": "1946652474196584",
+          "virtualBucket": ""
+        },
+        "object": {
+          "deltaSize": 122539,
+          "eTag": "688A7BF4F233DC9C88A80BF985AB7329",
+          "key": "source/serverless.jpg",
+          "size": 122539
+        },
+        "ossSchemaVersion": "1.0",
+        "ruleId": "9adac8e253828f4f7c0466d941fa3db81161e853"
+      },
+      "region": "cn-hangzhou",
+      "requestParameters": {
+        "sourceIPAddress": "140.205.128.221"
+      },
+      "responseElements": {
+        "requestId": "58F9FF2D3DF792092E12044C"
+      },
+      "userIdentity": {
+        "principalId": "262561392693583141"
+      }
+    }
+  ]
+}
+```
+
+注意, 由于是mock事件源, 函数执行时不会获得`credentials`, 实际上不能正确执行. 你可以向OSS存储桶手动上传一张照片来测试函数.
+
+
+
+### 上传第三方依赖
+
+以上一小节的代码为例, 在handler中使用了`jimp`第三方包, 实际上在本地没有什么不同, 仍然是`fun init`后修改函数即可, 这时`fun deploy`会自动压缩代码并上传.
+
+参见 [安装第三方依赖](https://help.aliyun.com/document_detail/74571.html?spm=a2c4g.11186623.6.615.436229111R1HsJ)
+
+
 
 ## 创建并触发HTTP函数
 
