@@ -3,7 +3,7 @@ category: Learning
 tags:
   - TypeScript
 date: 2020-4-22
-title: Redux与TypeScript协作: 越写越香   
+title: Redux与TypeScript协作：越写越香   
 ---
 
 ## 前言
