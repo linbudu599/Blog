@@ -348,6 +348,103 @@ Invoke Function: {"headers":{"access-control-expose-headers":"Date,x-fc-request-
 
 
 
+### CDN触发器
+
+> 摸索中
+
+
+
+### 定时触发器
+
+- 配置
+
+  ```json
+  {
+      payload:"payload"
+      cronExpression: "cronExpression"
+      enable: true|false
+  }
+  ```
+
+  **payload**: 载荷
+
+  **cronExpression**: 触发时间, 可为`@every`或者CRON标识(类似GitHub Actions的配置),  
+
+  `@every Value Unit`:
+
+  | Example                       | Expression   |
+  | :---------------------------- | :----------- |
+  | 每5分钟触发一次函数运行       | @every 5m    |
+  | 每1.5小时触发一次函数运行     | @every 1.5h  |
+  | 每2小时45分钟触发一次函数运行 | @every 2h45m |
+
+  CRON表达式:
+
+  `cron(Seconds Minutes Hours Day-of-month Month Day-of-week )`，即标准的cron表达式的形式
+
+  > 注意：Cron以UTC时间运行，即北京时间减去8个小时
+
+  | 字段名       | 允许的值        | 允许的特殊字符 |
+  | :----------- | :-------------- | :------------- |
+  | Seconds      | 0-59            |                |
+  | Minutes      | 0-59            | , - * /        |
+  | Hours        | 0-23            | , - * /        |
+  | Day-of-month | 1-31            | , - * ？/      |
+  | Month        | 1-12 or JAN-DEC | , - * /        |
+  | Day-of-week  | 1-7 or SUN-SAT  | , - * ?        |
+
+- 函数接收事件格式
+
+  ```json
+  {
+      "triggerTime":"2018-02-09T05:49:00Z",
+      "triggerName":"my_trigger",
+      "payload":"awesome-fc"
+  }
+  ```
+
+- 控制台创建, 比较简单
+
+- 命令行工具Fun, 示例配置
+
+  ```yaml
+  ROSTemplateFormatVersion: '2015-09-01'
+  Transform: 'Aliyun::Serverless-2018-04-03'
+  Resources:
+    FunDemo:
+      Type: 'Aliyun::Serverless::Service'
+      timedemo:
+        Type: 'Aliyun::Serverless::Function'
+        Properties:
+          Handler: index.handler
+          Runtime: nodejs8
+          CodeUri: './'
+        Events:
+          TmTrigger:
+            Type: Timer
+            Properties: 
+              Payload: "awesome-fc"
+              CronExpression: "0 0 8 * * *"  # utc 时间，北京时间减8小时
+              Enable: true
+  ```
+
+- 通过SDK创建
+
+  > type: "timer"
+
+  ### Trigger
+
+  | Name                          | Description                                                  | Schema |
+  | :---------------------------- | :----------------------------------------------------------- | :----- |
+  | **invocationRole** *required* | event source，如OSS，使用该role去invoke function **Example** : `"acs:ram::1234567890:role/fc-test"` | string |
+  | **sourceArn** *required*      | event source的Aliyun Resource Name（ARN） **Example** : `"acs:oss:cn-shanghai:12345:mybucket"` | string |
+  | **triggerConfig** *required*  | trigger配置，针对不同的trigger类型，trigger配置会有所不同    | object |
+  | **triggerName** *required*    | trigger名称 **Example** : `"image_resize"`                   | string |
+  | **triggerType** *required*    | trigger类型 **Example** : `"oss"`                            | string |
+  | **qualifier** *optional*      | service版本 **Example** : `"LATEST"`                         | string |
+
+
+
 ## 创建并触发HTTP函数
 
 > 我觉得可以把HTTP函数理解为类似于Express/Koa这样的Web应用模块, 在我们完成编写并部署到云上后, 只要设置好函数对应的HTTP触发器, 即可直接处理对应的HTTP请求.
