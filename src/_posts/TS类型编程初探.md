@@ -6,21 +6,162 @@ date: 2020-5-30
 title: TypeScript 类型编程初探
 ---
 
-## 类型守卫 & is 关键字
+## 条件类型
 
-> 待更新
+TypeScript 在 2.8 版本以后引入了 **条件类型** 的设定, 使得我们不用再把类型写死了, 条件类型会在获得需要的条件之后确定自己的类型, 最常使用的条件类型语法是这样的:
 
-## 分布式条件类型
+`T extends U ? TypeA : TypeB`
 
-> 待更新
+这与三目运算符的逻辑相同, 即当 T 能够赋值给 U 时, 取类型 A, 否则取类型 B. 关于 **T 赋给 U**这里, 其实我觉得可以真的理解为继承, 即 U 的属性 T 都有, 但 T 中的属性 U 不一定都有.
+
+如:
+
+```typescript
+// number
+type WhatAmI = string | number extends string ? string : number;
+```
+
+当然, 这里的 T 和 U 还可能是接口或者类型别名之类的. 以一个使用条件类型作为函数返回值签名的例子为例:
+
+```typescript
+declare function f<T extends boolean>(x: T): T extends true ? string : number;
+
+// 条件不足 只能推断出来 string | number
+const x = f(Math.random() < 0.5);
+// number
+const y = f(false);
+// string
+const z = f(true);
+```
+
+条件类型只有当获得的条件足够丰富, 才能够得到确切的类型.
+
+### 分布式有条件类型
+
+条件类型中有一个特殊的家伙, **分布式有条件类型**, 它有啥作用呢, 按照官方文档的说法,
+**分布式有条件类型在实例化时会自动分发成联合类型**, 同时 **分布式有条件类型** 成立的前提是其类型参数符合 **裸类型参数(Naked Type Parameter)**, 也就是说在你使用条件类型时传入的参数没有被数组/元组/函数/类/Promise..所包裹, 以`T extends U ? TypeA : TypeB`为例, T 与 U 都需要满足裸类型参数的要求, 才会实现分布式条件类型.
+
+```typescript
+type NakedUsage<T> = T extends boolean ? "YES" : "NO";
+
+type WrappedUsage<T> = [T] extends [boolean] ? "YES" : "NO";
+```
+
+那么分布式条件类型的作用是什么? 直接理解官方的解释未免太过拗口, 我们直接来写写例子:
+
+```typescript
+type Distributed = NakedUsage<number | boolean>; //  = NakedUsage<number> | NakedUsage<boolean> =  "NO" | "YES"
+
+type NotDistributed = WrappedUsage<number | boolean>; // "NO"
+```
+
+很明显的一个区别, `NakedUsage`在使用时, 传入的类型参数会被分别进行判断, 即分发到`NakedUsage<number> | NakedUsage<boolean>`, 再通过分别判断得到的值确定最终结果.
+
+而`WrappedUsage`, 由于类型参数被包裹在元组内, 因此在使用时只会进行一次判断, 也就不会进行**分发**
+
+### 条件类型与映射类型协作
+
+如果你阅读过一些 ts 写的库/框架源码, 你会发现 **泛型** / **映射类型** / **条件类型** 就像是绑在一起的三兄弟, 经常一同出现. 以一道思考题为例:
+
+```typescript
+interface Part {
+  id: number;
+  name: string;
+  subparts?: Part[];
+  updatePart(newName: string): void;
+}
+
+// 设计一个工具类型, 将接口中类型为函数的值取出来 即 type R = "updatePart"
+type R = FunctionPropertyNames<Part>;
+```
+
+思路是这样的, 我们新建一个接口, 使用旧的`interface`的字段, 再使用`[keyof T]`与`T[K]`取得字段的类型值, 判断这个类型值是否能`extends Function`:
+
+```typescript
+type FunctionPropertyNames<T> = {
+  [K in keyof T]: T[K] extends Function ? K : never
+}[keyof T];
+
+// 类型R的值为接口Part的键, 因此需要再`[keyof T]`取出值来
+type R = {
+  id: never;
+  name: never;
+  subparts: never;
+  updatePart: "updatePart";
+};
+```
 
 ## 索引类型 & 映射类型 & infer 关键字
 
-> 待更新
+这三者是 TypeScript 类型编程的关键基础, 因此如果想要写出漂亮又强大的泛型或是用类型编程玩出花来, 这是必不可少的.
+
+### 索引类型
+
+我相信我们应该都写过这样的代码:
+
+```typescript
+interface ISomething {
+  [key: string]: string;
+}
+```
+
+我个人认为这也可以算是索引类型的一种体现. 索引类型又分 **索引类型查询操作符** 与 **索引类型访问操作符**. 前者通常是这么用的:
+
+```typescript
+interface IWorker {
+  name: string;
+  age: string;
+  work: string;
+}
+
+type workerProps = keyof IWorker; // "name" | "age" | "work"
+```
+
+也就是说, 它是 某个接口(也可以是类型别名甚至类, 以下统一使用接口进行举例)的属性值构成的 联合类型, 其值是以字面量类型的形式存在的. 既然我们能拿到某个接口的所有字段了, 那么再迈一步, 我们就可以使用这个字段去获取到该字段对应的类型, 如`name`的类型为`string`. 即使用访问操作符, 如:
+
+```typescript
+// string | number | boolean
+type workerPropsType = IWorker[workerProps];
+```
+
+索引类型我个人常用于函数部分的泛型处理, 以一个类似 lodash 中 pick 的函数为例:
+
+```typescript
+function pick<T, K extends keyof T>(o: T, names: K[]): T[K][] {
+  return names.map((n) => o[n]);
+}
+
+const res = pick(user, ["token", "id"]);
+```
+
+### 映射类型
+
+映射类型的语法为 `[K in Keys]`, 其中 `K` 会依次绑定到每个属性(即依次以每个属性为值), `Keys`即为字符串字面量构成的联合类型, 也即是上面索引类型查询操作符`keyof`的结果.
+
+考虑这样一个场景, 当前有一个接口, 有数十个字段, 现在需要以这个接口为基础再创建一个接口, 变动就是所有字段都变为可选的, 该如何实现? 根据上面映射类型的定义, 我们很容易想到类似`{K?:T[K]}`的写法:
+
+```typescript
+interface IUser {
+  name: string;
+  age: number;
+  work: boolean;
+}
+
+type Partial<T> = { [K in keyof T]?: T[K] };
+
+// { name?: string; ...}
+type IPartialUser = Partial<IUser>;
+```
+
+这样的写法的确需要一定的理解成本, 因为 K 实际上是依次绑定到每个属性的, 你可以联想到 JavaScript 中的`map`函数. 类似的, 我们还可以用这种语法为每个字段添加/去掉`readonly`属性等等.
+
+### infer 关键字
+
+> 待处理
 
 ## 工具类型
 
-工具类型实际上是 TS 官方提供的一些封装好的类型别名(`Type`), 它们接收数个泛型, 并对其进行一定处理后返回我们需要的类型, 最常使用到的工具类型有`Partical`与`ReturnType`等. 如果你之前没有使用过工具类型, 可以先从这两个最为基础的入手, 看看工具类型能做什么.
+工具类型实际上是 TS 官方提供的一些封装好的类型别名(`Type`), 它们接收数个泛型, 并对其进行一定处理后返回我们需要的类型, 最常使用到的工具类型有`Partical`(其实就是上面实现的那个将接口字段全部变为可选的类型别名)与`ReturnType`等. 如果你之前没有使用过工具类型, 可以先从这两个最为基础的入手, 看看工具类型能做什么.
 
 **`Partical`**
 
