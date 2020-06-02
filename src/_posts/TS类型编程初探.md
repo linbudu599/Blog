@@ -6,13 +6,41 @@ date: 2020-5-30
 title: TypeScript 类型编程初探
 ---
 
+有一说一, `TypeScript`真的是会写上瘾的, 我目前接触到的 ts 大致可以分为这么几个部分:
+
+- 基础的类型使用, 包括`interface`, 函数入参与返回值签名, 简单泛型这种比较基础的使用
+- TS 的增强 Class 体系, 如静态/私有成员, 抽象类, 装饰器...
+- 进阶的类型编程, 包括工具类型扩展和其底层的实现, 索引/映射/条件类型等, 各种关键字...
+
+前面两种都是日常写代码会使用过的, 并且不需要特意去深入, 因为自然会用到其中. 但第三种, 就需要特意去学习了, 因为日常业务里我有时还是得写万恶的`any`..., 因为实在不知道有些类型要如何表示. 这篇文章就是对类型编程做了一个比较初步的总结.
+
+## 类型守卫 & is 关键字
+
+忘记是在哪个库或是课程的源码里看到过这样的实现:
+
+```typescript
+function isString(arg: any): arg is string {
+  return typeof arg === "string";
+}
+
+// 使用
+function invoker(numOrStr: number | string) {
+  if (isString(numOrStr)) {
+    console.log("Aha, This is a string!");
+    console.log(numOrStr.length);
+  }
+}
+```
+
+`isString`函数即是一个类型守卫, 它的作用即是判断`arg`是否是`string`类型, 并根据判断的结果返回`true`/`false`, 在调用类型守卫进行判断时, 它能够将待判断的参数类型范围确定到`string`. 如果我们将`arg is string`替换为`boolean`, 会发现在`invoker`中`numOrStr.length`会报错, 因为缺少了`is`关键字的情况下, `isString`无法精确的判断出参数的类型.
+
 ## 条件类型
 
 TypeScript 在 2.8 版本以后引入了 **条件类型** 的设定, 使得我们不用再把类型写死了, 条件类型会在获得需要的条件之后确定自己的类型, 最常使用的条件类型语法是这样的:
 
 `T extends U ? TypeA : TypeB`
 
-这与三目运算符的逻辑相同, 即当 T 能够赋值给 U 时, 取类型 A, 否则取类型 B. 关于 **T 赋给 U**这里, 其实我觉得可以真的理解为继承, 即 U 的属性 T 都有, 但 T 中的属性 U 不一定都有.
+这与三目运算符的逻辑相同, 即**当 T 能够赋值给 U 时, 取类型 A, 否则取类型 B**. 关于 **T 赋给 U**这里, 其实我觉得可以就是理解为继承, 即 **U 的属性 T 都有, 但 T 中的属性 U 不一定都有**.
 
 如:
 
@@ -21,7 +49,7 @@ TypeScript 在 2.8 版本以后引入了 **条件类型** 的设定, 使得我�
 type WhatAmI = string | number extends string ? string : number;
 ```
 
-当然, 这里的 T 和 U 还可能是接口或者类型别名之类的. 以一个使用条件类型作为函数返回值签名的例子为例:
+当然, 这里的 T 和 U 还可能是接口或者类型别名之类的. 以一个**使用条件类型作为函数返回值签名**的例子为例:
 
 ```typescript
 declare function f<T extends boolean>(x: T): T extends true ? string : number;
@@ -34,12 +62,12 @@ const y = f(false);
 const z = f(true);
 ```
 
-条件类型只有当获得的条件足够丰富, 才能够得到确切的类型.
+条件类型只有当获得的条件**足够丰富**, 才能够得到确切的类型.
 
 ### 分布式有条件类型
 
 条件类型中有一个特殊的家伙, **分布式有条件类型**, 它有啥作用呢, 按照官方文档的说法,
-**分布式有条件类型在实例化时会自动分发成联合类型**, 同时 **分布式有条件类型** 成立的前提是其类型参数符合 **裸类型参数(Naked Type Parameter)**, 也就是说在你使用条件类型时传入的参数没有被数组/元组/函数/类/Promise..所包裹, 以`T extends U ? TypeA : TypeB`为例, T 与 U 都需要满足裸类型参数的要求, 才会实现分布式条件类型.
+**分布式有条件类型在实例化时会自动分发成联合类型**, 同时 **分布式有条件类型** 成立的前提是其类型参数符合 **裸类型参数(Naked Type Parameter)**, 也就是说在你使用条件类型时传入的参数没有被数组/元组/函数/类/Promise..所包裹, 以`T extends U ? TypeA : TypeB`为例, **T 与 U 都需要满足裸类型参数的要求**, 才会实现分布式条件类型.
 
 ```typescript
 type NakedUsage<T> = T extends boolean ? "YES" : "NO";
@@ -157,7 +185,26 @@ type IPartialUser = Partial<IUser>;
 
 ### infer 关键字
 
-> 待处理
+`infer`关键字是许多工具类型扩展与底层类库中的常客, 在下一节我们会正式开始介绍工具类型, 但能读到这一节的你应该至少使用过数个工具类型, 没有也不要紧. 加沙我们现在需要设计一个工具类型, 其接收一个函数的类型作为参数, 并返回该函数的返回类型, 也就是:
+
+```typescript
+const foo = (): void => {};
+
+// void
+type typeFoo = ReturnType<typeof foo>;
+```
+
+先来看一个很简单的 infer 使用例子, 同样也是 ts 内置的工具类型:
+
+```typescript
+type ParamType<T> = T extends (param: infer P) => any ? P : T;
+```
+
+如果不看`(param: infer P) => any`, 还是很好理解的, 就是上面说的条件类型, 其实意思不变, 如果 `T` 能够赋值给`(param: infer P) => any`, 即结果是`(param: infer P) => any`中的类型参数 `P`, `infer P`即表示待推断的类型参数. 看到这里你是否 get 了一些什么? 我个人理解`infer`关键字就是表示 **待推断的类型参数, 可以作为未知类型的暂时声明, 当类型系统获得足够的条件, 它就能够被推导出来并作为类型或类型的一部分使用**, 类似的, `ReturnType`我们可以这么写:
+
+```typescript
+type ReturnType<T> = T extends (...args: any[]) => infer P ? P : any;
+```
 
 ## 工具类型
 
@@ -213,7 +260,11 @@ type Exclude<T, U> = T extends U ? never : T;
 
 ![Exclude](https://linbudu-img-store.oss-cn-shenzhen.aliyuncs.com/img/333.png)
 
-never 这个关键字在很多工具类型或是自定义工具类型中都有出现, 类型为 never 的字段将会被移除出类型, 因为其代表着永远也不会存在.
+never 这个关键字在很多工具类型或是自定义工具类型中都有出现, 类型为 **`never`** 的字段将会被移除出类型, 因为其代表着永远也不会存在.
+
+### ReturnType
+
+> 参考上一节中实现
 
 ### Pick
 
@@ -327,3 +378,7 @@ type Extract<T, U> = T extends U ? T : never;
   这个实现稍微复杂一些, 首先是`Extract<keyof T, keyof U> & Extract<keyof U, keyof T`这一步, 能够找出 T 与 U 共有的字段,然后再使用`Pick`将这些字段 pick 出来.
 
 这个库还提供了许多实用的工具类型, 不论是使用还是借助其学习 TS 的类型编程都是不错的选择~
+
+## 总结
+
+日后来写~
