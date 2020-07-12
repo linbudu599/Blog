@@ -50,8 +50,8 @@ const mapStateToProps = (state)=>{
 ```js
 import { createSelector } from "reselect";
 
-const selectorA = state => state.account.username;
-const selectorB = state => state.account.info;
+const selectorA = (state) => state.account.username;
+const selectorB = (state) => state.account.info;
 
 const selectSomeData = createSelector(
   // 不一定要数组哈，也可以分开传
@@ -60,8 +60,8 @@ const selectSomeData = createSelector(
 );
 
 // 一个copy的例子
-const getVisibilityFilter = state => state.visibilityFilter;
-const getTodos = state => state.todos;
+const getVisibilityFilter = (state) => state.visibilityFilter;
+const getTodos = (state) => state.todos;
 
 export const getVisibleTodos = createSelector(
   [getVisibilityFilter, getTodos],
@@ -70,9 +70,9 @@ export const getVisibleTodos = createSelector(
       case "SHOW_ALL":
         return todos;
       case "SHOW_COMPLETED":
-        return todos.filter(t => t.completed);
+        return todos.filter((t) => t.completed);
       case "SHOW_ACTIVE":
-        return todos.filter(t => !t.completed);
+        return todos.filter((t) => !t.completed);
     }
   }
 );
@@ -97,7 +97,7 @@ export const getVisibleTodos = createSelector(
 // 这里的getIn是Immutable.Js的，和这个api无关哈。
 const data: IRank = useSelector((state: IGlobalState) => ({
   rankList: state.getIn(["rank", "rankList"]),
-  loading: state.getIn(["rank", "loading"])
+  loading: state.getIn(["rank", "loading"]),
 }));
 
 const { rankList, loading } = data;
@@ -126,8 +126,8 @@ import { createSelector } from "reselect";
 import { useSelector } from "react-redux";
 
 const selectUserDisplay = createSelector(
-  state => state.currentUser,
-  state => state.entities.jobs,
+  (state) => state.currentUser,
+  (state) => state.entities.jobs,
   (user, jobs) => ({ ...user, job: jobs[user.job] })
 );
 
@@ -148,8 +148,8 @@ import { useSelector } from "react-redux";
 const { id } = props;
 const selectUserDisplay = useCallback(
   createSelector(
-    state => state.users,
-    state => state.entities.jobs,
+    (state) => state.users,
+    (state) => state.entities.jobs,
     (users, jobs) => {
       const { job, ...user } = users[id];
       return { ...user, job: jobs[job] };
@@ -172,8 +172,8 @@ import { useSelector } from "react-redux";
 
 // 组件里
 const { id } = props;
-const users = useSelector(s => s.entities.users);
-const jobs = useSelector(s => s.entities.jobs);
+const users = useSelector((s) => s.entities.users);
+const jobs = useSelector((s) => s.entities.jobs);
 const userDisplay = useMemo(() => {
   const { job, ...user } = users[id];
   return { ...user, job: jobs[job] };

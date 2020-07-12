@@ -127,22 +127,22 @@ _createClass(
       key: "sayName",
       value: function sayName() {
         console.log(this.name);
-      }
+      },
     },
     {
       key: "saySth",
       value: function saySth(str) {
         console.log(str);
-      }
-    }
+      },
+    },
   ],
   [
     {
       key: "staticMethod",
       value: function staticMethod(str) {
         console.log(str);
-      }
-    }
+      },
+    },
   ]
 );
 ```
@@ -262,8 +262,8 @@ var Child = /*#__PURE__*/ (function(_Parent) {
       key: "ownMethod",
       value: function ownMethod() {
         console.log("Own Method");
-      }
-    }
+      },
+    },
   ]);
 
   return Child;
@@ -280,7 +280,7 @@ function _inherits(subClass, superClass) {
     throw new TypeError("Super expression must either be null or a function");
   }
   subClass.prototype = Object.create(superClass && superClass.prototype, {
-    constructor: { value: subClass, writable: true, configurable: true }
+    constructor: { value: subClass, writable: true, configurable: true },
   });
   if (superClass) _setPrototypeOf(subClass, superClass);
 }
@@ -439,8 +439,8 @@ var Child = /*#__PURE__*/ (function(_Parent) {
       key: "ownMethod",
       value: function ownMethod() {
         console.log("Own Method");
-      }
-    }
+      },
+    },
   ]);
 
   return Child;

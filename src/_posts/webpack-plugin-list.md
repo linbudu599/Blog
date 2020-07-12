@@ -12,43 +12,43 @@ title: 还不错的Webpack插件合集
 
 - [clean-webpack-plugin](https://github.com/johnagan/clean-webpack-plugin)
 
-  在每次build后移除你的`dist`目录（可配置），默认情况下它会读取webpack配置的`output.path`。
+  在每次 build 后移除你的`dist`目录（可配置），默认情况下它会读取 webpack 配置的`output.path`。
 
 - [copy-webpack-plugin](https://github.com/webpack-contrib/copy-webpack-plugin)
 
-  用于将静态文件拷贝到你的输出目录下，有时一些文件并没有适用的loader或者是不需要经过处理，原样复制的文件。
+  用于将静态文件拷贝到你的输出目录下，有时一些文件并没有适用的 loader 或者是不需要经过处理，原样复制的文件。
 
 - [html-webpack-plugin](https://github.com/jantimon/html-webpack-plugin)
 
-  这个大部分人应该都知道，自动创建HTML模板供Webpack打包结果使用，功能还是蛮强大的，包括文件名称 模板参数 meta标签配置 压缩等等。SPA与MPA都会使用到。
+  这个大部分人应该都知道，自动创建 HTML 模板供 Webpack 打包结果使用，功能还是蛮强大的，包括文件名称 模板参数 meta 标签配置 压缩等等。SPA 与 MPA 都会使用到。
 
 - [ lodash-webpack-plugin](https://github.com/lodash/lodash-webpack-plugin)
 
-  这个的话，忘记是不是能被摇树优化或者`babel-plugin-import`替换掉了，用来实现Lodash的按需加载。
+  这个的话，忘记是不是能被摇树优化或者`babel-plugin-import`替换掉了，用来实现 Lodash 的按需加载。
 
 - [mini-css-extract-plugin](https://github.com/webpack-contrib/mini-css-extract-plugin)
 
-  用来将行内CSS抽离成`.css`文件，支持按需加载和SourceMap，性能也比`extract-text-webpack-plugin`更好
+  用来将行内 CSS 抽离成`.css`文件，支持按需加载和 SourceMap，性能也比`extract-text-webpack-plugin`更好
 
 - [optimize-css-assets-webpack-plugin](https://github.com/NMFR/optimize-css-assets-webpack-plugin)
 
-  优化 & 压缩CSS文件，可以选择使用的CSS预处理器（默认是`cssnano`）
+  优化 & 压缩 CSS 文件，可以选择使用的 CSS 预处理器（默认是`cssnano`）
 
 - [terser-webpack-plugin](https://github.com/webpack-contrib/terser-webpack-plugin)
 
-  一个使用[terser](https://github.com/terser/terser)来压缩JS文件的插件，支持多进程压缩和Terser选项配置。
-  
+  一个使用[terser](https://github.com/terser/terser)来压缩 JS 文件的插件，支持多进程压缩和 Terser 选项配置。
+
 - [hard-source-webpack-plugin](https://github.com/mzgoddard/hard-source-webpack-plugin)
 
-  webpack5的亮点之一，卖点是缓存效果，第二次打包最高可以减少95%以上的时间，但好像还有点坑没解决掉，观望中。webpack5应该是内置它的。
+  webpack5 的亮点之一，卖点是缓存效果，第二次打包最高可以减少 95%以上的时间，但好像还有点坑没解决掉，观望中。webpack5 应该是内置它的。
 
 - [npm-install-webpack-plugin](https://github.com/webpack-contrib/npm-install-webpack-plugin)
 
-  自动安装并保存依赖，这样就不用每次暂停掉编译进程了，和Parcel的思路相同，自动安装缺失的loader等等。
+  自动安装并保存依赖，这样就不用每次暂停掉编译进程了，和 Parcel 的思路相同，自动安装缺失的 loader 等等。
 
 - [prepack-webpack-plugin](https://github.com/gajus/prepack-webpack-plugin)
 
-  为[prepack](https://prepack.io/)打造的webpack插件
+  为[prepack](https://prepack.io/)打造的 webpack 插件
 
 - [ dotenv-webpack](https://github.com/mrsteele/dotenv-webpack)
 
@@ -56,7 +56,7 @@ title: 还不错的Webpack插件合集
 
 - [react-refresh-webpack-plugin](https://github.com/pmmmwh/react-refresh-webpack-plugin)
 
-  React的项目的热重载
+  React 的项目的热重载
 
 ### 效率/排查/美化相关
 
@@ -68,7 +68,7 @@ title: 还不错的Webpack插件合集
 
 - [ friendly-errors-webpack-plugin](https://github.com/geowarin/friendly-errors-webpack-plugin)
 
-  应该大部分官方的cli工具都集成了它，因为的确好看
+  应该大部分官方的 cli 工具都集成了它，因为的确好看
 
   ![lint](https://camo.githubusercontent.com/8d8e98c4430a5f6ccabe0604318e47ae2800a30f/687474703a2f2f692e696d6775722e636f6d2f7859526b6c64722e676966)
 
@@ -76,7 +76,7 @@ title: 还不错的Webpack插件合集
 
 - [webpackbar](https://github.com/nuxt/webpackbar)
 
-  芜湖，我最爱的插件！最开始是在Vuepress见到的，当时还不知道这是一个独立的模块。webpack进度条，配合chalk啊还有上面的插件，给你炫酷的编译过程~
+  芜湖，我最爱的插件！最开始是在 Vuepress 见到的，当时还不知道这是一个独立的模块。webpack 进度条，配合 chalk 啊还有上面的插件，给你炫酷的编译过程~
 
   ![img](https://github.com/nuxt/webpackbar/raw/master/assets/screen1.png)
 

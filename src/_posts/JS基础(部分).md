@@ -255,7 +255,7 @@ inc(); // return: 2
       },
       value: function() {
         return privateCounter;
-      }
+      },
     };
   })();
 

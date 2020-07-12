@@ -3,7 +3,7 @@ category: Learning
 tags:
   - TypeScript
 date: 2020-4-22
-title: Redux与TypeScript协作：越写越香   
+title: Redux与TypeScript协作：越写越香
 ---
 
 ## 前言
@@ -15,9 +15,9 @@ title: Redux与TypeScript协作：越写越香
 
 ## 正文
 
-### 规范store
+### 规范 store
 
-我个人认为, 有必要对整个应用的store树做一个类型定义, 不仅是为了方便一眼看清整个store的数据流结构, 也是为了在后续使用`useSelector`一类API时对整体state约束.
+我个人认为, 有必要对整个应用的 store 树做一个类型定义, 不仅是为了方便一眼看清整个 store 的数据流结构, 也是为了在后续使用`useSelector`一类 API 时对整体 state 约束.
 
 `store/model.ts`, 你也可以写在`store/index.ts`中
 
@@ -43,7 +43,7 @@ export interface IGlobalState {
 }
 ```
 
-整个store拥有两颗"子树", 在本文中为节约篇幅只会对其中之一进行具体描述.
+整个 store 拥有两颗"子树", 在本文中为节约篇幅只会对其中之一进行具体描述.
 
 ### 定义常量
 
@@ -61,7 +61,7 @@ export enum StateOneActionTypes {
 
 ### 定义`Action Creators`
 
-`/store/state1/action.ts`,  这里的重点逻辑是为`Action`定义接口, 以及合并接口为类型别名(供`Reducer`使用)
+`/store/state1/action.ts`, 这里的重点逻辑是为`Action`定义接口, 以及合并接口为类型别名(供`Reducer`使用)
 
 ```typescript
 import { StateOneActionTypes } from "./constants";
@@ -102,7 +102,7 @@ export type StateOneAction = IOneMutationOne | IOneMutationTwo;
 
 使用`payload`也是受到`Dva`的影响, 这样可以在后续方便的将载荷统一解构出来. 我感觉, 虽然多个`Action Creators`可能会有重复代码, 但还是最好隔离开来.
 
-### 定义Reducer
+### 定义 Reducer
 
 `/store/state1/reducer.ts`
 
@@ -177,7 +177,7 @@ export default store;
 
 ### 使用
 
-> 这里使用到了`useSelector`与`useDispatch`这两个`React-Redux`的Hooks API, 我个人认为这会逐渐取代`mapStateToProps`与`mapDispatchToProps`. 如果你不了解这两个API, 可以阅读我的[这篇博客](https://linbudu.top/posts/2020/02/20/关于useselector的一些思考.html)
+> 这里使用到了`useSelector`与`useDispatch`这两个`React-Redux`的 Hooks API, 我个人认为这会逐渐取代`mapStateToProps`与`mapDispatchToProps`. 如果你不了解这两个 API, 可以阅读我的[这篇博客](https://linbudu.top/posts/2020/02/20/关于useselector的一些思考.html)
 
 `App.tsx`
 
@@ -192,7 +192,6 @@ import { useSelector, useDispatch } from "react-redux";
 import "./App.css";
 
 function App() {
-
   const data = useSelector(({ state1 }: IGlobalState) => {
     return {
       ...state1,
@@ -234,11 +233,7 @@ function App() {
     );
   }, []);
 
-  return (
-    <>
-      {/* TSX */}
-    </>
-  );
+  return <>{/* TSX */}</>;
 }
 
 export default App;
@@ -252,6 +247,6 @@ export default App;
 
 ## 总结
 
-我个人认为, 这一套"繁琐"的模板代码和`TypeScript`绝不是多此一举, 二者从两个不同的角度去约束继而帮助开发者写出健壮的易于维护的代码, 繁琐的模板代码避免了开发者犯下"拼错action type"/"没有通过dispatch"之类的错误, 而`TypeScript`则用强大的类型系统把奇奇怪怪的`undefined`之类的错误挡在门外.
+我个人认为, 这一套"繁琐"的模板代码和`TypeScript`绝不是多此一举, 二者从两个不同的角度去约束继而帮助开发者写出健壮的易于维护的代码, 繁琐的模板代码避免了开发者犯下"拼错 action type"/"没有通过 dispatch"之类的错误, 而`TypeScript`则用强大的类型系统把奇奇怪怪的`undefined`之类的错误挡在门外.
 
-(TypeScript真香)
+(TypeScript 真香)
