@@ -330,6 +330,133 @@ type Extract<T, U> = T extends U ? T : never;
   */
   ```
 
+- PickByValue
+
+基于值类型的Pick
+
+```ts
+declare type PickByValue<T, ValueType> = Pick<
+  T,
+  { [Key in keyof T]-?: T[Key] extends ValueType ? Key : never }[keyof T]
+>;
+  
+type Test = PickByValue<
+  { name: string; age: number; desc: string; isMale: boolean },
+  string
+>
+type Test = {
+  name: string;
+  desc: string;
+}
+```
+
+`{ [Key in keyof T]-?: T[Key] extends ValueType ? Key : never }`会返回如下形式的值
+
+```ts
+{
+    name: "name";
+    age: never;
+    desc: "desc";
+    isMale: never;
+}
+```
+
+加上`[keyof T]`后，会返回`"name"|"desc"`这一联合类型（实际上来自于上面对象的值），然后使用键值组成的联合类型去Pick出来值。
+
+类似的有`OmitByValue`:
+
+```ts
+declare type OmitByValue<T, ValueType> = Pick<
+  T,
+  { [Key in keyof T]-?: T[Key] extends ValueType ? never : Key }[keyof T]
+>;
+```
+
+
+
+- RequiredKeys
+
+返回接口中所有非`readonly`属性的值
+
+```ts
+type RequiredKeys<T> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+}[keyof T];
+```
+
+关键在`{} extends Pick<T, K>`这里:
+
+```ts
+interface SSS {
+  a?: string;
+  b: number;
+}
+// {a?:string|undefined}，因此能被{}继承
+type AA =  Pick<SSS, 'a'>;
+```
+
+
+
+- OptionalKeys
+
+与`RequiredKeys`相反
+
+```ts
+export type OptionalKeys<T> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? K : never;
+}[keyof T];
+```
+
+
+
+- DeepReadonly
+
+```ts
+declare type DeepReadonly<T> = {
+  readonly [K in keyof T]: DeepReadonly<T[K]>;
+};
+```
+
+
+
+- DeepRequired
+
+```ts
+declare type DeepRequired<T> = {
+  [K in keyof T]-?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
+```
+
+
+
+- Mutable & DeepMutable
+
+```ts
+// 浅取消只读属性
+declare type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+
+// 深取消只读属性
+declare type DeepMutable<T> = {
+  -readonly [P in keyof T]: DeepMutable<T[P]>;
+};
+```
+
+
+
+- PromiseType
+
+提取Promise类型
+
+```ts
+// 提取Promise类型， 如PromiseType<Promise<string>> -> string
+declare type PromiseType<T extends Promise<any>> = T extends Promise<infer U>
+  ? U
+  : never;
+```
+
+
+
+
 - Merge<O1, O2>:
 
   `Merge`类型能够合并两个类型, 实际上其底层实现使用了`Compute`与`Omit`, 思路是使用`Omit`剔除掉 O2 中 O1 的字段后, 使用`Compute`进行合并.
