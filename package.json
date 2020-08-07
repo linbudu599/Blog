@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/linbudu599/linbudu599.github.io",
   "dependencies": {
-    "vuepress": "^1.5.2",
+    "vuepress": "^1.5.3",
     "vuepress-theme-meteorlxy": "^1.9.0"
   },
   "devDependencies": {
