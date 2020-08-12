@@ -3,9 +3,8 @@ category: Learning
 tags:
   - Other
 date: 2020-8-10
-title: 走近MidwayJS：IoC与TS装饰器（草稿）
+title: 走近MidwayJS：IoC与TS装饰器
 ---
-
 
 
 ## 前言
@@ -63,24 +62,28 @@ title: 走近MidwayJS：IoC与TS装饰器（草稿）
 
 下面的部分里，我们会讲解这些东西：
 
-- TS装饰器 基本语法、类型
-- Reflect 元编程
-- IoC机制与依赖注入（Dependence Injection）
-- 实现简单的基于IoC的路由
-- 常用依赖注入工具库
+- **TS装饰器 基本语法、类型**
+- **Reflect 元编程**
+- **IoC机制与依赖注入（Dependence Injection）**
+- **实现简单的基于IoC的路由**
+- **常用依赖注入工具库**
 
 
 
 ## TS 装饰器
 
 ### TS装饰器的那些事儿
-注意，JS与TS中的装饰器不是一回事，JS中的装饰器目前依然停留在 [stage 2](https://github.com/tc39/proposal-decorators) 阶段，并且目前版本的草案与TS中的实现差异相当之大（TS是基于第一版，JS目前已经第三版了），所以二者最终的装饰器实现必然有非常大的差异。
+首先我们需要知道，JS与TS中的装饰器不是一回事，JS中的装饰器目前依然停留在 [stage 2](https://github.com/tc39/proposal-decorators) 阶段，并且目前版本的草案与TS中的实现差异相当之大（TS是基于第一版，JS目前已经第三版了），所以二者最终的装饰器实现必然有非常大的差异。
 
-但是并不需要担心，即使装饰器永远到达不了stage-3/4阶段，它也不会消失的。有相当多的框架都是装饰器的重度用户，如`Angular`、`Nest`、`Midway`等。对于装饰器的实现与编译结果会始终保留，就像`JSX`一样。如果你对它的历史与发展方向有兴趣，可以读一读 [TS中装饰器的本质](https://www.zhihu.com/question/68257128) 与 [是否应该在production里使用typescript的decorator？](https://www.zhihu.com/question/404724504)（贺师俊贺老的回答）
+其次，装饰器不是TS所提供的特性（如类型、接口），而是TS实现的ECMAScript提案（就像类的私有成员一样）。TS实际上只会对**stage-3**以上的语言提供支持，比如TS3.7.5引入了可选链（[Optional chaining](https://github.com/tc39/proposal-optional-chaining)）与空值合并（[Nullish-Coalescing](https://github.com/tc39/proposal-nullish-coalescing)）。而当TS引入装饰器时（大约在15年左右），JS中的装饰器依然处于**stage-1**
+
+阶段。其原因是TS与Angular团队PY成功了，Ng团队不再维护 [AtScript]([atscript-playground](https://github.com/angular/atscript-playground))，而TS引入了注解语法（**Annotation**）及相关特性。
+
+但是并不需要担心，即使装饰器永远到达不了stage-3/4阶段，它也不会消失的。有相当多的框架都是装饰器的重度用户，如`Angular`、`Nest`、`Midway`等。对于装饰器的实现与编译结果会始终保留，就像`JSX`一样。如果你对它的历史与发展方向有兴趣，可以读一读 [是否应该在production里使用typescript的decorator？](https://www.zhihu.com/question/404724504)（贺师俊贺老的回答）
 
 
 
-为什么我们需要装饰器？在后面的例子中我们会体会到装饰器的强大与魅力，基于装饰器我们能够快速优雅的复用逻辑，同时我们本文的重点：**依赖注入**也可以通过装饰器来非常简洁的实现。现在我们可能暂时体会不到 **强大**、**简洁** 这些关键词，不急，安心读下去。我会尝试通过这篇文章让你对TS装饰器整体建立起一个认知，并在日常开发里也爱上使用装饰器。
+为什么我们需要装饰器？在后面的例子中我们会体会到装饰器的强大与魅力，基于装饰器我们能够**快速优雅的复用逻辑**，**提供注释一般的解释说明效果**，以及**对业务代码进行能力增强**。同时我们本文的重点：**依赖注入**也可以通过装饰器来非常简洁的实现。现在我们可能暂时体会不到 **强大**、**简洁** 这些关键词，不急，安心读下去。我会尝试通过这篇文章让你对TS装饰器整体建立起一个认知，并在日常开发里也爱上使用装饰器。
 
 
 
@@ -92,6 +95,8 @@ title: 走近MidwayJS：IoC与TS装饰器（草稿）
 
 - **注解** 应该如同字面意义一样， 只是为某个被注解的对象提供元数据（`metadata`）的注入，本质上不能起到任何修改行为的操作，需要`scanner`去进行扫描获得元数据并基于其去执行操作，注解的元数据才有实际意义。
 - **装饰器** 没法添加元数据，只能基于已经由注解注入的元数据来执行操作，来对类、方法、属性、参数进行某种特定的操作。
+
+但实际上，TS中的装饰器通常是同时包含了这两种效能的，它可能消费元数据的同时也提供了元数据供别的装饰器消费。
 
 
 
@@ -175,7 +180,7 @@ a.originMethod = () => {
   console.log("I'm Changed!");
 };
 
-a.originMethod();// I'm Changed!
+a.originMethod(); // I'm Original! 并没有被修改
 ```
 
 你是否觉得有点想起来`Object.defineProperty()`？ 的确方法装饰器也是借助它来修改类和方法的属性的，你可以去[TypeScript Playground](https://www.typescriptlang.org/play)看看TS对上面代码的编译结果。
@@ -489,7 +494,7 @@ function validate<T>(
 
 在这个例子中，我们基于`Reflect.getMetadata('design:type', target, propertyKey);`获取到了装饰器对应声明的属性类型，并确保在`setter`被调用时检查值类型。
 
-这里的 `design:type` 即是TS的内置元数据，你可以理解为TS在编译前还手动执行了`@Reflect.metadata("design:type", Point)`。TS还内置了**`design:paramtypes`（获取目标参数类型）**与**`design:returntype`（获取方法返回值类型）**这两种元数据字段来提供帮助。但有一点需要注意，即使对于基本类型，这些元数据也返回对应的包装类型，如`number` -> `[Function: Number]`
+这里的 `design:type` 即是TS的内置元数据，你可以理解为TS在编译前还手动执行了`@Reflect.metadata("design:type", Point)`。TS还内置了**`design:paramtypes`（获取目标参数类型）**与**`design:returntype`（获取方法返回值类型）**这两种元数据字段来提供帮助。但有一点需要注意，**即使对于基本类型，这些元数据也返回对应的包装类型，如`number` -> `[Function: Number]`**
 
 
 
@@ -531,9 +536,11 @@ class C {
 }
 ```
 
-现在A、B、C之间没有了耦合，甚至当某个类D需要使用C的实例时，我们也可以把C交给IoC容器。我们现在能够知道IoC容器大概的作用了：容器内部维护着一个对象池，管理着各个对象实例，当用户需要使用实例时，容器会自动将对象实例化交给用户。
+现在A、B、C之间没有了耦合，甚至当某个类D需要使用C的实例时，我们也可以把C交给IoC容器。
 
-再举个栗子，当我们想要处对象时，会上Soul、Summer、陌陌...等等去一个个找，找谁与怎么找是由我自己决定的，这叫 **控制正转**。现在我觉得有点麻烦，直接把自己的介绍上传到世纪佳缘，如果有人看上我了，就会主动向我发起聊天。
+我们现在能够知道IoC容器大概的作用了：容器内部维护着一个对象池，管理着各个对象实例，当用户需要使用实例时，容器会自动将对象实例化交给用户。
+
+再举个栗子，当我们想要处对象时，会上Soul、Summer、陌陌...等等去一个个找，找哪种的与怎么找是由我自己决定的，这叫 **控制正转**。现在我觉得有点麻烦，直接把自己的介绍上传到世纪佳缘，如果有人看上我了，就会主动向我发起聊天，这叫 **控制反转**。
 
 DI的全称为**Dependency Injection**，即**依赖注入**。依赖注入是控制反转最常见的一种应用方式，就如它的名字一样，它的思路就是在对象创建时自动注入依赖对象。再以`Injection`的使用为例：
 
@@ -764,6 +771,10 @@ export class UserService {
 
 读完这篇文章，我想你应该对TypeScript中的装饰器与IoC机制有了大概的了解，如果你意犹未尽，不妨去看一下TypeScript对装饰器、反射元数据的编译结果，见[TypeScript Playground](https://www.typescriptlang.org/play)。或者，如果你想早点开始了解MidwayJS，在阅读[文档](https://midwayjs.org/midway/)的基础上，你也可以瞅瞅我写的这个简单的Demo：[Midway-Article-Demo](https://github.com/linbudu599/Midway-Article-Demo)，基于 `Midway` + `TypeORM` + `SQLite3`，但请注意仍处于雏形，许多Midway的强大能力尚未得到体现，所以不要以这个Demo判定Midway的能力，我会尽快完善这个Demo的。
 
-下一篇，我们会讲解Midway的基础能力，以及对Midway-Serverless：阿里巴巴淘系技术部面对Serverless交出的其中一份答卷。
+下一篇，我们会讲解Midway的基础能力，以及对Midway-Serverless：阿里巴巴淘系技术部面对Serverless交出的其中一份答卷的展望。本篇内容可能还是有些枯燥，下一篇我们就会进入欢乐的实战环节啦~
+
+
+
+
 
 
