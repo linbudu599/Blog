@@ -2,162 +2,203 @@
 category: Learning
 tags:
   - Other
-date: 2020-7-07
-title: Immer 源码解读（草稿）
+date: 2020-8-12
+title: 精读Immer源码（草稿）
 ---
 
-## 优势
+## 前言
 
-- 使用原生 JS 的 API 与数据结构
-- TS 支持好
-- 共享不变的结构
-- 深度更新的开销小
-- 模板代码少
-- 低学习成本，直接修改对象即可
-- 支持 Map 与 Set（需要额外开启~）
+icestore hox dva redux compare
+
+
+
+## Immutable 与 Immer
+
+- 思路 & 代码示例
+- 开销 & 性能
+
+
+
+> - 全新的数据结构操作方式
+> - 操作结果需要通过`toJS`方法才能得到原生对象，使得在操作一个对象的时候需要小心翼翼。
+
+
+
+【例子：操作对象】
+
+【例子：React Reducer + Immer(curried produce)】
+
+
+
+Immer的优势大致可以归类为以下几点：
+
+- 使用原生 JS 的 API 与数据结构，直接使用原生API修改数据，几乎为0的学习成本。
+- 共享不变的结构，来大大降低深度更新的开销。
+- 支持 Map 与 Set 数据结构，同时支持使用`Object.defineProperty`来对ES5做支持。
+- 柯里化与Redux的良好支持
 - 轻量！
 
-## 分析
 
-- 基于 Proxy（支持 defineProperty 来 fallback）
-- currentState -> draftState -> nextState，初始状态不会被改动，草稿状态是初始状态的代理，变更会反映到草稿状态上，并用来生成新状态，生成时还会共享不变的数据结构。
 
-## 对 Class 的处理
+## 简介
 
-- Class 的草稿状态是一个新对象,但是和原本的 Class 共享原型
-- 创建草稿对象时 Immer 会复制所有属性，包括不可枚举的和 Symbol()值（getOwnPropertySymbols()?）
-- getters 会在拷贝过程中被触发
-- 继承的 getter 和方法同样会被草稿对象继承
-- 不会触发（invoke）构造函数
-- 最终实例的构造过程和草稿创建过程一样
-- 草稿中只有具有 setter 的 getter 会被写入，不然这个值是无法更新的
+在开始前，对于没有使用过Immer的同学，我们势必要稍微讲解一下Immer整体的思路，否则后面的源码环节可不好读懂。
 
-## API
+【图：Immer原理示意图】
 
-- produce
-- current()，草稿的当前状态（快照），未来对草稿的状态不会影响到这个方法的返回值，由其创建的对象不会被冻结（produce 的会~），可以在异步中保存
-- original ✔️
-- isDraft ✔️
-- setAutoFreeze ✔️ freeze+isFrozen
-- setUseProxies ✔️ revocable 收回代理权，控制访问（仅允许一次）
+Immer整体的思路很简单，总共就几个概念:
 
-## 思路
+- `currentState`，即你传入produce的首个参数，这是初始状态。
+- `draftState`，Immer内部根据你的初始状态生成了这个”草稿对象“（实际上是初始状态的代理），对原先对象的操作会反映在这个草稿对象上，以此来保证原对象不会被改变。
+- `nextState`，根据草稿对象来生成（`finalize`）一个最终的对象，这即是produce方法的返回值。
 
-内部自己维护一份 state，劫持掉所有读写，内部根据变化决定如何返回。
+也就是说，我们会以一个代理对象搜集所有的写操作（读操作还是会使用原对象），并根据这个代理对象去生成最终的全新状态。在这个过程中实际上Immer还会做许多优化，包括：
 
-```javascript
-class Store {
-  constructor(state) {
-    this.modified = false;
-    this.source = state;
-    this.copy = null;
-  }
-  get(key) {
-    if (!this.modified) return this.source[key];
-    return this.copy[key];
-  }
-  set(key, value) {
-    if (!this.modified) this.modifing();
-    return (this.copy[key] = value);
-  }
-  modifing() {
-    if (this.modified) return;
-    this.modified = true;
-    this.copy = Array.isArray(this.source)
-      ? this.source.slice()
-      : { ...this.source };
-  }
-}
+- 由于Proxy只能监听单层，因此对于嵌套对象需要创建多层Proxy，Immer采取了只创建顶层Proxy，后续按需创建的措施，可以理解为代理的懒初始化。以`draftState.a.x = 1`为例，当`draftState.a`这个`getter`触发时，才会去创建对应到`draftState.a`的proxy对象。
+- 复用没有变动的子树，而只是替换掉发生了变动的子树到根节点的整条线路，这样做在修改深层嵌套对象时在性能上有很大的帮助。
+- 冻结初始对象，待扩展。
 
-const PROXY_FLAG = "@@SYMBOL_PROXY_FLAG";
-const handler = {
-  get(target, key) {
-    if (key === PROXY_FLAG) return target;
-    return target.get(key);
-  },
-  set(target, key, value) {
-    return target.set(key, value);
-  },
-};
 
-function produce(state, producer) {
-  const store = new Store(state);
-  const proxy = new Proxy(store, handler);
 
-  producer(proxy);
+## 源码环节
 
-  const newState = proxy[PROXY_FLAG];
-  if (newState.modified) return newState.copy;
-  return newState.source;
+xxxx铺垫下
+
+
+
+我们的目点会放在基本使用，而柯里化的过程与Map、Set、ES5代理实现以及patch功能（可理解为时间旅行能力）都只会一笔带过。
+
+
+
+我们从入口开始，这个文件简化的样子如下：
+
+```typescript
+import { IProduce, Immer } from "./internal";
+
+const immer = new Immer();
+
+export const produce: IProduce = immer.produce;
+
+export default produce;
+
+export const setAutoFreeze = immer.setAutoFreeze.bind(immer);
+
+export const setUseProxies = immer.setUseProxies.bind(immer);
+```
+
+默认导出的`produce`方法来自于全局唯一的immer实例，而`Immer`类来自于`immerClass.ts`文件，这个马上就会讲到。稍微看一眼`setAutoFreeze`和`setUseProxies`这两个方法，这两个方法会决定在produce过程中是否自动冻结初始状态与是否使用ES6 Proxy。
+
+
+
+导出的 immer 实例来自于 Immer 类（immerClass.ts），这个类大概长这样：
+
+```typescript
+export class Immer implements ProducersFns {
+	useProxies_: boolean = hasProxies;
+
+	autoFreeze_: boolean = __DEV__ ? true /* istanbul ignore next */ : !isMinified
+
+	constructor(config?: { useProxies?: boolean; autoFreeze?: boolean }) {
+		if (typeof config?.useProxies === "boolean")
+			this.setUseProxies(config!.useProxies);
+		if (typeof config?.autoFreeze === "boolean")
+			this.setAutoFreeze(config!.autoFreeze);
+		this.produce = this.produce.bind(this);
+	}
+
+	produce(base: any, recipe?: any, patchListener?: any) {
+		// ...
+	}
+
+
+	setAutoFreeze(value: boolean) {
+		this.autoFreeze_ = value;
+	}
+
+	setUseProxies(value: boolean) {
+		if (value && !hasProxies) {
+			die(20);
+		}
+		this.useProxies_ = value;
+	}
 }
 ```
 
-判断 modify 的值来决定返回哪一个，这样和 immer 就只差深嵌套对象更新时的结构化共享和校验了。
+可以看到在实例化的过程中会设置`autoFreeze_`与`useProxies_`属性，后续immer实例实际上会被作为参数在各个方法间传递，因此只需要`immer.autoFreeze_`的方式就能获取到配置。
 
-## 源码
+最最重要的produce方法内部：
 
-对草稿对象的深拷贝对反馈到自定义的 setter 函数，它并不修改原始对象值，而是递归父级进行浅拷贝，并返回新的顶级对象作为新状态。
+```typescript
+produce(base: any, recipe?: any, patchListener?: any) {
+		if (typeof base === "function" && typeof recipe !== "function") {
+			// ...柯里化处理逻辑
+		}
 
-- 初始状态 -> 草稿状态，生成代理对象，注入额外信息
+		let result;
 
-  ```js
-  {
-    modified, // 是否被修改过
-    finalized, // 是否已经完成（所有 setter 执行完，并且已经生成了 copy）
-    parent, // 父级对象
-    base, // 原始对象（也就是 obj）
-    copy, // base（也就是 obj）的浅拷贝，使用 Object.assign(Object.create(null), obj) 实现
-    proxies, // 存储每个 propertyKey 的代理对象，采用懒初始化策略
-  }
-  ```
-
-  在代理对象上绑定了 getter 和 setter，然后交由 producer
-
-- getter： 懒初始化的代理生成，节省性能并支持递归监听
-
-- setter：对原始值浅拷贝（保存到 copy），设置 modified 为 true，按需浅拷贝！根据 parent 属性递归父级不断浅拷贝，确定此节点到根节点的链路对象是最新的。
-
-- 执行完 produce 后：如果用户的操作已完成而 modified 仍为 fasle，说明没有发生过修改，直接返回 base。反之则需要返回其 copy 属性，由于 setter 过程是递归的，使得 draft 的子对象还是 draft（包含了前面注入的额外信息），需要层层递归拿到最终值。
-
-- 递归 base 和 copy 的子属性，不同则递归整个过程，否则直接返回。
-
-- 最终的对象由 base 的未修改的部分+copy 的修改的部分拼接得到（这就是共享结构的方式），再使用 freeze 冻结 copy 属性，置 finalized 为 true。
-
-- 注意递归调用 finalize 的过程
-
-> 跳过 Patch 柯里化 fallback（Map Set ES5 ...）的部分
-
-### Immer 类
-
-导出的 immer 实例来自于 Immer 类，在初始化时会根据 autoFreeze\_与 useProxies\_（有根据生产环境和是否经过压缩的机制）全局初始化（单例模式），并将 produce 方法绑定到当前的实例，默认导出的就是这个 produce 方法。
-
-#### produce 方法
-
-接收 base recipe patchListener
-
-最开始会判断 base 为函数（柯里化的情况）以及 patchListener 启用情况，这里就跳过了，直接看最主要的用法，如
-
-```js
-import produce from "immer";
-
-const baseState = [
-  {
-    todo: "Learn typescript",
-    done: true,
-  },
-  {
-    todo: "Try immer",
-    done: false,
-  },
-];
-
-const nextState = produce(baseState, (draftState) => {
-  draftState.push({ todo: "Tweet about it" });
-  draftState[1].done = true;
-});
+		// Only plain objects, arrays, and "immerable classes" are drafted.
+		if (isDraftable(base)) {
+			const scope = enterScope(this);
+			const proxy = createProxy(this, base, undefined);
+			let hasError = true;
+			try {
+				result = recipe(proxy);
+				hasError = false;
+			} finally {
+				// finally instead of catch + rethrow better preserves original stack
+				if (hasError) revokeScope(scope);
+				else leaveScope(scope);
+			}
+			// 异步处理
+			if (typeof Promise !== "undefined" && result instanceof Promise) {
+				// ...
+			}
+			usePatchesInScope(scope, patchListener);
+			const res = processResult(result, scope);
+			return res;
+		} else if (!base || typeof base !== "object") {
+			result = recipe(base);
+			if (result === NOTHING) return undefined;
+			if (result === undefined) result = base;
+			if (this.autoFreeze_) freeze(result, true);
+			return result;
+		} else die(21, base);
+	}
 ```
 
-先判断 isDraftable（是否可生成 Draftable State），只有 PlainObject（在 common 里的方法，主要是无原型对象以及原型为 Object.prototype 的对象~），数组，以及"Immerable Classes"。
+首先是判断入参，来确定是否是柯里化调用，否则才走正常处理逻辑。然后判断入参是否是可草稿化的（draftable），其判断函数如下：
+
+```typescript
+export function isDraftable(value: any): boolean {
+	if (!value) return false
+	return (
+		isPlainObject(value) ||
+		Array.isArray(value) ||
+		!!value[DRAFTABLE] ||
+		!!value.constructor[DRAFTABLE] ||
+		isMap(value) ||
+		isSet(value)
+	)
+}
+
+/*#__PURE__*/
+export function isPlainObject(value: any): boolean {
+	if (!value || typeof value !== "object") return false
+	const proto = Object.getPrototypeOf(value)
+	return !proto || proto === Object.prototype
+}
+```
+
+也就是说只有数组/plainObject/Map/Set才可以草稿化，`!!value[DRAFTABLE] ||
+!!value.constructor[DRAFTABLE]`的逻辑涉及到类的草稿化，这里暂时跳过。
+
+然后是很重要的两个方法，`enterScope`与`createProxy`：
+
+在immer整体源码中
+
+
+
+
 
 首先生成 scope，enterScope()方法中，创建了绑定到当前 immer 实例的 currentScope，保存了这些信息：
 
@@ -219,3 +260,99 @@ traps，也就是代理后拦截设置（拦截哪些操作 做出哪些修改�
 返回的结果需要走 processResult，将 base 中没改变的和 draft 中的收集到的改变拼接起来。在其中还需要调用 finalize 函数，finalize 和 finalizeTree 暂时跳过（看不懂 QAQ）
 
 对于 base 不存在的情况(!base)以及类型不为对象的 base，则是直接走 recipe()
+
+
+
+## 一个简版Immer
+
+内部自己维护一份 state，劫持掉所有读写，内部根据变化决定如何返回。
+
+```javascript
+class Store {
+  constructor(state) {
+    this.modified = false;
+    this.source = state;
+    this.copy = null;
+  }
+  get(key) {
+    if (!this.modified) return this.source[key];
+    return this.copy[key];
+  }
+  set(key, value) {
+    if (!this.modified) this.modifing();
+    return (this.copy[key] = value);
+  }
+  modifing() {
+    if (this.modified) return;
+    this.modified = true;
+    this.copy = Array.isArray(this.source)
+      ? this.source.slice()
+      : { ...this.source };
+  }
+}
+
+const PROXY_FLAG = "@@SYMBOL_PROXY_FLAG";
+const handler = {
+  get(target, key) {
+    if (key === PROXY_FLAG) return target;
+    return target.get(key);
+  },
+  set(target, key, value) {
+    return target.set(key, value);
+  },
+};
+
+function produce(state, producer) {
+  const store = new Store(state);
+  const proxy = new Proxy(store, handler);
+
+  producer(proxy);
+
+  const newState = proxy[PROXY_FLAG];
+  if (newState.modified) return newState.copy;
+  return newState.source;
+}
+```
+
+判断 modify 的值来决定返回哪一个，这样和 immer 就只差深嵌套对象更新时的结构化共享和校验了。
+
+### Immer 对 ES6 Class 的处理
+
+- Class 的草稿状态是一个新对象,但是和原本的 Class 共享原型
+- 创建草稿对象时 Immer 会复制所有属性，包括不可枚举的和 Symbol()值（getOwnPropertySymbols()?）
+- getters 会在拷贝过程中被触发
+- 继承的 getter 和方法同样会被草稿对象继承
+- 不会触发（invoke）构造函数
+- 最终实例的构造过程和草稿创建过程一样
+- 草稿中只有具有 setter 的 getter 会被写入，不然这个值是无法更新的
+
+对草稿对象的深拷贝对反馈到自定义的 setter 函数，它并不修改原始对
+
+- 初始状态 -> 草稿状态，生成代理对象，注入额外信息
+
+  ```js
+  {
+    modified, // 是否被修改过
+    finalized, // 是否已经完成（所有 setter 执行完，并且已经生成了 copy）
+    parent, // 父级对象
+    base, // 原始对象（也就是 obj）
+    copy, // base（也就是 obj）的浅拷贝，使用 Object.assign(Object.create(null), obj) 实现
+    proxies, // 存储每个 propertyKey 的代理对象，采用懒初始化策略
+  }
+  ```
+
+  在代理对象上绑定了 getter 和 setter，然后交由 producer
+
+- getter： 懒初始化的代理生成，节省性能并支持递归监听
+
+- setter：对原始值浅拷贝（保存到 copy），设置 modified 为 true，按需浅拷贝！根据 parent 属性递归父级不断浅拷贝，确定此节点到根节点的链路对象是最新的。
+
+- 执行完 produce 后：如果用户的操作已完成而 modified 仍为 fasle，说明没有发生过修改，直接返回 base。反之则需要返回其 copy 属性，由于 setter 过程是递归的，使得 draft 的子对象还是 draft（包含了前面注入的额外信息），需要层层递归拿到最终值。
+
+- 递归 base 和 copy 的子属性，不同则递归整个过程，否则直接返回。
+
+- 最终的对象由 base 的未修改的部分+copy 的修改的部分拼接得到（这就是共享结构的方式），再使用 freeze 冻结 copy 属性，置 finalized 为 true。
+
+- 注意递归调用 finalize 的过程
+
+> 跳过 Patch 柯里化 fallback（Map Set ES5 ...）的部分
