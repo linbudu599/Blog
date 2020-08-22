@@ -430,3 +430,69 @@ console.log(person.age); // 18
 - [TSYringe](https://github.com/microsoft/tsyringe)
 
 - [Injection](https://github.com/midwayjs/injection)
+
+### TypeDI 使用
+
+```ts
+import { Container, Service, Inject } from 'typedi';
+
+interface Factory {
+  create(): void;
+}
+
+@Service('bean.factory')
+class BeanFactory implements Factory {
+  create() {}
+}
+
+@Service('sugar.factory')
+class SugarFactory implements Factory {
+  create() {}
+}
+
+@Service('water.factory')
+class WaterFactory implements Factory {
+  create() {}
+}
+
+@Service('coffee.maker')
+class CoffeeMaker {
+  beanFactory: Factory;
+  sugarFactory: Factory;
+
+  @Inject('water.factory')
+  waterFactory: Factory;
+
+  constructor(@Inject('bean.factory') beanFactory: BeanFactory, @Inject('sugar.factory') sugarFactory: SugarFactory) {
+    this.beanFactory = beanFactory;
+    this.sugarFactory = sugarFactory;
+  }
+
+  make() {
+    this.beanFactory.create();
+    this.sugarFactory.create();
+    this.waterFactory.create();
+  }
+}
+
+let coffeeMaker = Container.get<CoffeeMaker>('coffee.maker');
+coffeeMaker.make();
+```
+
+```ts
+import { Container, Service, Inject } from 'typedi';
+
+// somewhere in your global app parameters
+Container.set('authorization-token', 'RVT9rVjSVN');
+
+@Service()
+class UserRepository {
+  @Inject('authorization-token')
+  authorizationToken: string;
+}
+```
+
+
+
+
+
