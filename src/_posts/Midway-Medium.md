@@ -831,3 +831,142 @@ const cors = ({ methods, origin }: ICORSOptions): Middleware => {
 
 export default cors; 
 ```
+
+
+
+你会发现这个中间件和Koa的中间件有些区别, 实际上它返回的那个函数才是中间件, 它可以接受选项来做基于环境或者是各种条件的定制. 那么它的选项来自于哪里? 这就要提到另一个我觉得设计很精巧的Egg/MidwayJS思路了, 中间件的启用和传给中间件的配置都在`config`文件中, 基于此我们能够快速根据环境来调整启用的中间件与传入给中间件的配置.
+
+
+
+同时, 由于底层基于Koa, 所以我们还可以直接使用大部分的Koa中间件, 如`koa-logger`
+
+我们在`middleware`下再新增一个`logger.ts`:
+
+```typescript
+import logger from 'koa-logger';
+
+export default logger;
+```
+
+
+
+来到`config/config.default.ts`, 我们进行如下配置:
+
+```typescript
+import { EggAppConfig, EggAppInfo, PowerPartial } from 'midway';
+import path from 'path';
+
+export type DefaultConfig = PowerPartial<EggAppConfig>;
+
+export default (appInfo: EggAppInfo) => {
+  const config = {} as DefaultConfig;
+
+  config.keys = appInfo.name + '_{{keys}}';
+
+  config.middleware = ['cors', 'logger'];
+
+  config.security = {
+    csrf: false,
+  };
+
+  config.cors = {
+    methods: '*',
+    origin: '*',
+  };
+
+  return config;
+};
+
+```
+
+在这里我们开启了cors与looger中间件, 并设置允许所有域和所有http方法通过.
+
+来启动项目, 任意访问一个路由:
+
+![](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/QQ%E6%88%AA%E5%9B%BE20200823110533.png)
+
+在配置中启用的路由是全局的, 那么如果我们想要使用路由级别的中间件该如何处理? 比如有部分比较耗时的操作, 只在部分路由生效, 或者是某些路由代表了敏感操作需要进行鉴权与日志留存?
+
+在这里我们实现后者的情况, 对删除用户时做一个日志记录:
+
+在`middleware`下新增`delLogger.ts`:
+
+```typescript
+import {
+  Middleware,
+  WebMiddleware,
+  provide,
+  logger,
+  config,
+  EggLogger,
+  EggAppConfig,
+} from "midway";
+
+import { log } from "../../util";
+
+@provide()
+export class DelMw implements WebMiddleware {
+  @config("delRouter")
+  delConfig: EggAppConfig;
+
+  @logger("delLogger")
+  logger: EggLogger;
+
+  resolve(): Middleware {
+    return async (ctx, next) => {
+      ctx.auth = this.delConfig.auth;
+
+      log(
+        `=== DEL Router Mw Invoked With UID: ${ctx.params.uid} & Auth: ${ctx.auth} ===`
+      );
+
+      this.logger.warn(
+        `=== DEL Router Mw Invoked With UID: ${ctx.params.uid} & Auth: ${ctx.auth} ===`
+      );
+      await next();
+
+      log("=== DEL Router Mw End");
+    };
+  }
+}
+
+```
+
+路由级别的中间件推荐以类的形式书写, 其中的`public resolve`方法才是实际执行的中间件, 这么一来使得它同样可以被IoC容器收集(因为被`@provide()`装饰了), 并且也可以注入配置.
+
+在`config.default.ts`中新增:
+
+```typescript
+config.delRouter = {
+    auth: true,
+  };
+
+config.customLogger = {
+  delLogger: {
+    level: 'INFO',
+    file: path.join(appInfo.root, 'logs/del.log'),
+  },
+};
+```
+
+使用POSTMan 访问`/user/uid/1` (`DELETE`):
+
+![](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/QQ%E6%88%AA%E5%9B%BE20200823111150.png)
+
+
+
+![](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/QQ%E6%88%AA%E5%9B%BE20200823110533.png)
+
+查看`log/del.log`:
+
+![](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/QQ%E6%88%AA%E5%9B%BE20200823111555.png)
+
+
+
+## Midway-Serverless
+
+
+
+## Midway-Hooks
+
+
