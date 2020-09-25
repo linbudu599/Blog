@@ -3,18 +3,18 @@ category: Learning
 tags:
   - Other
 date: 2020-09-23
-title: 基于provider的Flutter状态管理
+title: Flutter状态管理(一)：使用Provider并复用你的Redux思想
 ---
 
-## TODO
-
-- [ ] InheritedWidget
-- [x] Provider
-- [ ] BLoC
-- [ ] Fish-Redux
-- [ ] RxDart
-
 ## 前言
+
+> 写作规划
+>
+> - [ ] InheritedWidget
+> - [x] Provider
+> - [ ] BLoC
+> - [ ] Fish-Redux
+> - [ ] RxDart
 
 个人认为, 状态管理真的是前端避不开的问题..., 随着应用复杂度的提升, 好的状态管理方案在解耦 & 数据共享 & 数据流追踪控制 等方面都能起到很好的作用. 在Web开发中, 我们使用过Redux/Mobx/Reconciler这些主流方案, 或者是基于其基本思想的Dva/Icestore/Hox等等. 在Flutter中进行状态管理, 这实际上也是我首次接触. 因此可能存在一些错误或是不足, 还请见谅.
 
@@ -36,6 +36,8 @@ title: 基于provider的Flutter状态管理
 
 ## Provider
 
+> 由我翻译的 [provider中文文档](https://github.com/linbudu599/provider/blob/docs/simplified-chinese/resources/translations/zh-CN/README.md)
+
 Provider是官方推荐的状态管理方案, 我个人上手后感觉和`Redux` + `React-Redux`的体感类似, 并且非常容易上手, 它的底层同样基于`[InheritedWidget]`, 官方给出的优势包括:
 
 - 对资源的简易配置与卸载
@@ -48,10 +50,10 @@ Provider是官方推荐的状态管理方案, 我个人上手后感觉和`Redux`
 
 在开始前, 我们可以尝试将其中的重要概念对标到`React-Redux`中
 
-- ChangeNotifier: 数据存放的地方, 就像store
-- ChangeNotifierProvider: 提供数据的Widget, 就像`<Provider>`
-- Consumer: 数据的消费
-- Selector: 数据的清洗, 就像`useSelector`或者是`Reselect`这种, 但不清楚是否有缓存支持
+- ChangeNotifier: 数据存放的地方, 就像`store`
+- ChangeNotifierProvider: 提供数据的Widget, 就像我们放在React组件最外层的`<Provider>`组件, ChangeNotifierProvider只是提供的providers中最为常用的一种.
+- Consumer: 数据的消费者
+- Selector: 数据的清洗与'清洗过程优化', 就像`useSelector`或者是`Reselect`这种, 但暂时不清楚底层是否做了类似的缓存支持, 确定的是Selector会对集合类型的值做深比较
 
 还是以计数器为例子:
 
@@ -116,7 +118,22 @@ class StateManagementDemo extends StatelessWidget {
 
 ```
 
-这里使用了`MultiProvider`, 来更清晰的组织状态树, 这样的思路我们在Redux中也经常使用.
+这里使用了`MultiProvider`, 来更清晰的组织状态树, 否则很可能出现Provider一层套一层的情况, 比如:
+
+```dart
+Provider<Something>(
+  create: (_) => Something()，
+  child: Provider<SomethingElse>(
+    create: (_) => SomethingElse()，
+    child: Provider<AnotherThing>(
+      create: (_) => AnotherThing()，
+      child: someWidget，
+    )，
+  )，
+)，
+```
+
+这样的思路我们在Redux中也经常使用.
 
 现在widget树内就可以共享这些状态了, 但我们需要使用Consumer来进行构建:
 
@@ -124,8 +141,14 @@ class StateManagementDemo extends StatelessWidget {
 class HomePage extends StatelessWidget {
   const HomePage({Key key}) : super(key: key);
 
+    
+  Widget _text(BuildContext context, String text) {
+  	return Text(text,
+      	style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500));
+  	}
   @override
   Widget build(BuildContext context) {
+    print("build");
     return Center(
         child: Scaffold(
             appBar: AppBar(
@@ -133,17 +156,34 @@ class HomePage extends StatelessWidget {
             ),
             body: Center(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Text("Counter Cousumer"),
+                  Text(
+                    "Counter Cousumer",
+                    style: Theme.of(context).textTheme.headline5,
+                  ),
                   Consumer<Counter>(
                     builder: (ctx, counter, child) {
                       return Column(
                         children: <Widget>[
-                          Text(
-                              "Current Count By 'counter.count': ${counter.count}",
-                              style: TextStyle(fontSize: 18)),
+                          const Count(),
+                          _text(context, "Consumer: ${counter.count}"),
+                        ],
+                      );
+                    },
+                  ),
+                  Padding(padding: EdgeInsets.only(top: 20)),
+                  Text(
+                    "Transformed Counter Cousumer",
+                    style: Theme.of(context).textTheme.headline6,
+                  ),
+                  Consumer<Transform>(
+                    builder: (ctx, transform, child) {
+                      return Column(
+                        children: <Widget>[
+                          _text(context,
+                              "read: ${context.read<Transform>().transformed}"),
+                          _text(context, 'Consumer: ${transform.transformed}'),
                         ],
                       );
                     },
@@ -152,7 +192,7 @@ class HomePage extends StatelessWidget {
               ),
             ),
             floatingActionButton: // ...
-                ));
+            ));
   }
 }
 ```
@@ -160,71 +200,40 @@ class HomePage extends StatelessWidget {
 我们重点看这一部分:
 
 ```dart
- Consumer<Counter>(
-   builder: (ctx, counter, child) {
-     return Column(
-       children: <Widget>[
-         Text(
-           "Current Count By 'counter.count': ${counter.count}",
-              style: TextStyle(fontSize: 18)),
-         ],
+Consumer<Counter>(
+  builder: (ctx, counter, child) {
+    return Column(
+      children: <Widget>[
+        const Count(),
+        _text(context, "Consumer: ${counter.count}"),
+        ],
       );
     },
-  )
+  ),
 ```
 
 它接受三个参数:
 
-- ctx: BuildContext, 上下文(用于定位树中位置)
-- 当前ChangeNotifier对应的实例
+- ctx: `BuildContext`, 上下文(用于定位树中位置)
+- 当前`ChangeNotifier`对应的实例
 - child: 用于优化widget rebuild的手段, 使用方式见下面的例子
 
 现在我们可以获取数据了, 那么消费呢? 我们创建`floatingActionButton`:
 
 ```dart
-floatingActionButton: Selector<Counter, Counter>(
-  // 如何进行转换
-  selector: (ctx, provider) => provider,
-  // 是否希望rebuild
-  shouldRebuild: (pre, next) => false,
-  // child: Icon(Icons.add),
-  builder: (ctx, counter, child) {
-  print("floating action button build");
-  return Column(children: <Widget>[
-    Container(
-      height: 500,
-        ),
-     FloatingActionButton(
-     child: Icon(Icons.arrow_upward_rounded),
-       onPressed: () {
-         counter.increment();
-        }),
-      FloatingActionButton(
-        child: Icon(Icons.arrow_downward_rounded),
-        onPressed: () {
-          counter.decrement();
-        	}),
-    	]);
-	})
+   floatingActionButton: Consumer<Counter>(
+      child: Icon(Icons.add),
+      builder: (ctx, counter, child) {
+        return FloatingActionButton(
+          child: child,
+          onPressed: () {
+            counter.increment();
+          });
+        })
 ```
 
-> 如果你只有一个按钮, 就可以使用child参数来进行rebuild优化, 我暂时还没找到把ChangeNotifier实例抽离到child中的方法.
+> 像这样使用child参数来进行优化, 能够很好的控制widget的rebuild.
 >
-> 例子:
->
-> ```dart
->  floatingActionButton: Consumer<CounterProvider>(
->         builder: (ctx, counterPro, child) {
->           return FloatingActionButton(
->             child: child,
->             onPressed: () {
->               counterPro.counter += 1;
->             },
->           );
->         },
->         child: Icon(Icons.add),
->       ),
-> ```
 
 这里使用了`Selector`来构建组件, Selector的优势主要有:
 
@@ -240,14 +249,67 @@ class Count extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-        '${context.watch<Counter>().count}',
-        style: Theme.of(context).textTheme.headline4);
+    return _text(context,
+        'Extract Count to a separate widget & [context.watch]: ${context.watch<Counter>().count}');
   }
 }
 
 // 2. 由于Provider基于InheritedWidget, 因此我们可以使用Provider.of, 但是实际上还是推荐Consumer, 因为毕竟自带性能优化(会确保尽可能少的rebuild)
-Text("Current Count By 'Provider.of<counter>(ctx)': ${Provider.of<Counter>   (ctx).count}",style: TextStyle(fontSize: 18))
+   _text(context,'Provider.of<counter>(ctx): ${Provider.of<Counter>(ctx).count}')
 ```
 
-本部分代码见[Flutter-Praticing](https://github.com/linbudu599/Flutter-Praticing/blob/master/review/app/state_management.dart)
+
+
+我们再来简单回顾一下:
+
+- 提供数据: 使用 [ChangeNotifierProvider](https://pub.dartlang.org/documentation/provider/latest/provider/ChangeNotifierProvider-class.html) , 或是根据你的需求使用其他的Provider如`FutureProvider`等, 为了更好的组织状态树, 推荐使用
+- 消费数据: 使用 `Consumer` / `Selector` / `Provider.of()`(来自于`InheritedWidget`), 或者使用`provider`在构建上下文context上扩展的属性: `watch`/`select`/`read`(根据具体需求)
+- 性能优化: Selector与`context.select<T>()`
+
+
+
+另外一个可能比较常用的`Provider`: `ProxyProvider`, 它的用法主要是在数据层面对状态做转换, 可以同时接收多个providers的数据.
+
+```dart
+void main() {
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider(
+        create: (_) => Counter(),
+        lazy: true,
+      ),
+      ProxyProvider<Counter, Transform>(
+          update: (_, counter, __) => Transform(counter.count))
+    ],
+    child: ProviderDemo(),
+  ));
+}
+
+class Transform {
+  final int _value;
+
+  const Transform(this._value);
+
+  String get transformed => "U clicked $_value times";
+}
+
+// build
+Text(
+  "Transformed Counter Cousumer",
+   style: Theme.of(context).textTheme.headline6,
+  ),
+  Consumer<Transform>(
+    builder: (ctx, transform, child) {
+      return Column(
+        children: <Widget>[
+           _text(context,
+           "read: ${context.read<Transform>().transformed}"),
+            _text(context, 'Consumer: ${transform.transformed}'),
+          ],
+        );
+     },
+   ),
+```
+
+
+
