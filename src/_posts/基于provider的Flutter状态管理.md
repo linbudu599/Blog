@@ -8,14 +8,6 @@ title: Flutter状态管理(一)：使用Provider并复用你的Redux思想
 
 ## 前言
 
-> 写作规划
->
-> - [ ] InheritedWidget
-> - [x] Provider
-> - [ ] BLoC
-> - [ ] Fish-Redux
-> - [ ] RxDart
-
 个人认为, 状态管理真的是前端避不开的问题..., 随着应用复杂度的提升, 好的状态管理方案在解耦 & 数据共享 & 数据流追踪控制 等方面都能起到很好的作用. 在Web开发中, 我们使用过Redux/Mobx/Reconciler这些主流方案, 或者是基于其基本思想的Dva/Icestore/Hox等等. 在Flutter中进行状态管理, 这实际上也是我首次接触. 因此可能存在一些错误或是不足, 还请见谅.
 
 要开始学习Flutter的状态管理, 我们务必需要了解到Flutter的声明式编程理念, 就像JSX一样的 UI = f(State) 思路, 我们通常把"状态"分为两类:
