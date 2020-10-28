@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Record
 tags:
-  - Other
+  - React
+  - Optimization
 date: 2020-7-004
 title: 记一次 React 性能优化
 ---

@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Record
 tags:
-  - Other
+  - Docker
 date: 2020-3-13
 title: Docker常用指令
 ---

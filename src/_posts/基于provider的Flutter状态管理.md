@@ -1,7 +1,7 @@
 ---
 category: Learning
 tags:
-  - Other
+  - Flutter
 date: 2020-09-23
 title: Flutter状态管理(一)：使用Provider并复用你的Redux思想
 ---

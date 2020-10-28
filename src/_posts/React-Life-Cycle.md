@@ -1,7 +1,7 @@
 ---
 category: Learning
 tags:
-  - Other
+  - React
 date: 2020-6-29
 title: React V16.4生命周期初探
 ---

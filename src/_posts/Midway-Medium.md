@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Tutorial
 tags:
-  - Other
+  - Node
+  - Midway
 date: 2020-7-31
 title: 走近MidwayJS：基于Midway打造后台应用
 ---

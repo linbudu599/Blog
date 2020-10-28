@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Record
 tags:
-  - Other
+  - Basic
 date: 2020-3-17
 title: 搞懂执行上下文+闭包+AO/VO+作用域(链)
 ---

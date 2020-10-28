@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Article
 tags:
-  - Other
+  - Babel
+  - ES6
 date: 2020-3-25
 title: 从Babel编译结果看ES6的Class实质
 ---

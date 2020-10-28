@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Tutorial
 tags:
-  - Other
+  - React
+  - Hooks
 date: 2020-10-28
 title: 从一个需求出发，聊一聊useRef三兄弟
 ---

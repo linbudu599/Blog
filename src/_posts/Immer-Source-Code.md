@@ -1,16 +1,10 @@
 ---
-category: Learning
+category: Source
 tags:
-  - Other
+  - React
 date: 2020-8-12
 title: 精读Immer源码（草稿）
 ---
-
-## 前言
-
-icestore hox dva redux compare
-
-
 
 ## Immutable 与 Immer
 

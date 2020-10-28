@@ -1,7 +1,7 @@
 ---
 category: Learning
 tags:
-  - Other
+  - Flutter
 date: 2020-09-23
 title: Flutter状态管理初接触(二)：InheritedWidget与React中的context
 ---

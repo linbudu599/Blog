@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Translate
 tags:
-  - Other
+  - GraphQL
 date: 2020-5-05
 title: 译：在Apollo与Relay之间选择一个GraphQL Client
 ---

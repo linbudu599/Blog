@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Tutorial
 tags:
-  - Other
+  - Node
+  - Midway
 date: 2020-8-10
 title: 走近MidwayJS：IoC与TS装饰器
 ---

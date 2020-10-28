@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Tutorial
 tags:
-  - Other
+  - TypeScript
 date: 2020-10-19
 title: TypeScript的另一面-类型编程
 ---

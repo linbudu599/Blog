@@ -2,6 +2,7 @@
 category: Thoughts
 tags:
   - React
+  - Redux
 date: 2020-2-20
 title: 关于useSelector的一些学习
 ---

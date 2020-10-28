@@ -1,7 +1,7 @@
 ---
 category: Learning
 tags:
-  - Other
+  - React
 date: 2020-7-06
 title: 瞄瞄Concurrent模式：Suspense（草稿）
 ---

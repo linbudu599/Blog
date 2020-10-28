@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Source
 tags:
-  - Other
+  - React
 date: 2020-7-08
 title: React Fiber（无限期鸽置草稿，芜湖！）
 ---

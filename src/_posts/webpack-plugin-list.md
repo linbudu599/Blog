@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Record
 tags:
-  - Other
+  - Webpack
 date: 2020-6-18
 title: 还不错的Webpack插件合集
 ---

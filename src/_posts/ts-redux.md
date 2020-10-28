@@ -1,7 +1,8 @@
 ---
-category: Learning
+category: Record
 tags:
   - TypeScript
+  - Redux
 date: 2020-4-22
 title: Redux与TypeScript协作：越写越香
 ---

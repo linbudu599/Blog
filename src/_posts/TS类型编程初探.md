@@ -1,7 +1,7 @@
 ---
-category: Learning
+category: Tutorial
 tags:
-  - Other
+  - TypeScript
 date: 2020-5-30
 title: TypeScript 类型编程初探
 ---
