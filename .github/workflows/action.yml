@@ -16,10 +16,7 @@ jobs:
         with:
           node-version: 12
       - name: npm install
-        run: |
-          npm install
-        env:
-          CI: true
+        run: npm install
       - name: Build Dist
         run: npm run build
       - name: Deploy
