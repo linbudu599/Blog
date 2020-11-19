@@ -24,7 +24,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SECRET_KEY }}
           ARGS: "-avz --delete"
-          SOURCE: "*"
+          SOURCE: "dist/"
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          TARGET: /usr/share/nginx/html/Blog
+          TARGET: /usr/share/nginx/html/Blog/dist
