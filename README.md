@@ -4,11 +4,10 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/linbudu599/Blog/deploy%20blog%20to%20aliyun)
 [![GitHub issues](https://img.shields.io/github/issues/linbudu599/Blog)](https://github.com/linbudu599/Blog/issues)
 [![GitHub stars](https://img.shields.io/github/stars/linbudu599/Blog)](https://github.com/linbudu599/Blog/stargazers)
-[![GitHub license](https://img.shields.io/github/license/linbudu599/Blog)](https://github.com/linbudu599/Blog)
 
 Visit in [https://linbudu.top/](https://linbudu.top/).
 
-BACK_UP_SITE_VERCEL: https://linbudu-blog.vercel.app/
-BACK_UP_SITE_NETLIFY: https://linbudu-blog.netlify.app/
+- [BACK_UP_VERCEL](https://linbudu-blog.vercel.app/)
+- [BACK_UP_NETLIFY](https://linbudu-blog.netlify.app/)
 
 This Blog is in a [migration](https://github.com/linbudu599/the-great-gatsby) to [GatsbyJS](https://www.gatsbyjs.org/).

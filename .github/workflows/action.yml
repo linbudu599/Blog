@@ -1,4 +1,4 @@
-name: deploy blog to aliyun
+name: Deployment
 on:
   push:
     branches:
@@ -15,8 +15,10 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 12
-      - name: npm install
-        run: npm install
+      - name: Cnpm Prepare
+        run: npm i cnpm -g
+      - name: Deps Install
+        run: cnpm i
       - name: Build Dist
         run: npm run build
       - name: Deploy
