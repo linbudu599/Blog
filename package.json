@@ -4,7 +4,6 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vuepress dev src",
     "build": "vuepress build src"
   },
@@ -19,10 +18,10 @@
   },
   "homepage": "https://github.com/linbudu599/linbudu599.github.io",
   "dependencies": {
-    "vuepress": "^1.7.1",
+    "vuepress": "^1.1.0",
     "vuepress-theme-meteorlxy": "^1.5.1"
   },
   "devDependencies": {
-    "@vuepress/plugin-google-analytics": "^1.7.1"
+    "@vuepress/plugin-google-analytics": "^1.2.0"
   }
 }

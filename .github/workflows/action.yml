@@ -1,8 +1,11 @@
-name: Deployment
+name: Build-Deployment
+
 on:
   push:
-    branches:
-      - master
+    branches: [master]
+  pull_request:
+    branches: [master]
+
 jobs:
   build:
     strategy:
@@ -15,10 +18,8 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 12
-      - name: Cnpm Prepare
-        run: npm i cnpm -g
       - name: Deps Install
-        run: cnpm i
+        run: npm i
       - name: Build Dist
         run: npm run build
       - name: Deploy
