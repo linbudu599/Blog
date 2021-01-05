@@ -7,16 +7,23 @@ date: 2020-12-07
 title: Apollo-Server-Vercel 源码浅析
 ---
 
-> 直接讲解, 过渡 & 人话 & 介绍 & 总结 明天补上
+> 直接讲解, 过渡 & 人话 & 介绍 & 总结 ~~明天补上~~ 自己领悟
 
 总共就四个文件:
 
-- index.ts 从 ApolloServer.ts 导出ApolloServer, 供使用`server.createHandler`
+- index.ts
 - ApolloServer.ts
 - setHeaders.ts
 - vercelApollo.ts
 
+## Index.ts
 
+```typescript
+export { ApolloServer } from "./ApolloServer"
+export type { CreateHandlerOptions } from "./ApolloServer"
+```
+
+入口文件, 不做讲解
 
 ## ApolloServer.ts
 
@@ -30,9 +37,9 @@ createGraphQLServerOptions(req: NowRequest, res: NowResponse): Promise<GraphQLOp
   }
 ```
 
-~~暂时没搞懂这是用来干啥的, 全局只有这个~~
+~~暂时没搞懂这是用来干啥的, 全局只有这个~~  文件上传相关的, 暂时跳过. 
 
-文件上传相关的, 暂时跳过. `graphQLServerOptions`这个方法的作用是从对象中生成graphql options, 对象包括请求(`http.IncomingRequests`)以及特定实现的选项, 这里的选项应该是指像`Apollo-Server-Koa`中传入的选项那样, 因为这个方法定义在`Apollo-Server-Core`里面.
+`graphQLServerOptions`这个方法的作用是从对象中生成`graphql options`, 对象包括请求(`http.IncomingRequests`)以及特定实现(Express/Koa/Hapi/...)的选项, 这里的选项应该是指像`Apollo-Server-Koa`中传入的选项那样, 因为这个方法定义在`Apollo-Server-Core`里面.
 
 `createHandler`, 绝大部分是在处理cors...
 
@@ -78,7 +85,9 @@ return async (req: NowRequest, res: NowResponse) => {
 }
 ```
 
-内部, 首先使用上面的cors头字段来配置请求头:
+内部:
+
+首先使用上面的cors头字段来配置请求头:
 
 ```typescript
 const requestCorsHeaders = new Headers(corsHeaders);
@@ -127,10 +136,9 @@ if (req.method === `OPTIONS`) {
         setHeaders(res, requestCorsHeadersObject);
         return res.status(204).send(``);
       }
-
 ```
 
-下面还对`req.url = '/.well-known/apollo/server-health'`这种情况做了处理, 这应该是Apollo的onHealthCheck相关的, 也跳过.
+下面还对`req.url = '/.well-known/apollo/server-health'`这种情况做了处理, 是Apollo的onHealthCheck相关的, 也跳过.
 
 在最后一部分是对`graphql-playground`的处理:
 
@@ -156,12 +164,84 @@ if (req.method === `OPTIONS`) {
 这里的逻辑主要是判断出本次请求是在请求playground, 就渲染并返回
 
 ```typescript
-          return res.status(200).send(renderPlaygroundPage(playgroundRenderPageOptions));
+return res.status(200).send(renderPlaygroundPage(playgroundRenderPageOptions));
 ```
 
 `renderPlaygroundPage`函数来自于`@apollographql/graphql-playground-html`包, 应该是类似express-graphql中对graphiql的处理.
 
+然后在最后, 返回被`graphqlVercel`处理过的函数:
 
+```typescript
+ return graphqlVercel(async () => {
+        await promiseWillStart;
+        return this.createGraphQLServerOptions(req, res);
+      })(req, res);
+```
+
+然后`createHandler`就结束了, 先看一下最终调用方式:
+
+```typescript
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  playground: true,
+  introspection: true
+});
+
+export default server.createHandler();
+```
+
+也就是说, 调用createHandler方法返回了:
+
+```typescript
+async (req, res) => {
+  // ...
+   return graphqlVercel(async () => {
+        await promiseWillStart;
+        return this.createGraphQLServerOptions(req, res);
+      })(req, res);
+}
+```
+
+先去看看graphqlVercel是个啥:
+
+## vercelApollo.ts
+
+```typescript
+export function graphqlVercel(options: GraphQLOptions | NowGraphQLOptionsFunction): NowApiHandler {
+  if (!options) throw new Error(`Apollo Server requires options.`);
+
+  if (arguments.length > 1) {
+    throw new Error(`Apollo Server expects exactly one argument, got ${arguments.length}`);
+  }
+
+  const graphqlHandler = async (req: NowRequest, res: NowResponse) => {
+    if (req.method === `POST` && !req.body) {
+      return res.status(500).send(`POST body missing.`);
+    }
+
+    try {
+      const { graphqlResponse, responseInit } = await runHttpQuery([req, res], {
+        method: req.method as string,
+        options,
+        query: req?.body || req.query,
+        request: convertNodeHttpToRequest(req)
+      });
+      setHeaders(res, responseInit.headers ?? {});
+      return res.status(200).send(graphqlResponse);
+    } catch (error) {
+      const { headers, statusCode, message }: HttpQueryError = error;
+      setHeaders(res, headers ?? {});
+      return res.status(statusCode).send(message);
+    }
+  };
+
+  return graphqlHandler;
+}
+```
+
+- 接收一个函数, 这个函数会先执行Apollo-Server的willStart钩子, 然后返回创建的选项(从签名来看也可以直接传入选项, 但是要自己处理willStart吧)
+- 创建`graphqlHandler`函数, `graphqlVercel`接受的`(req, res)`就是给这个函数使用的, 然后内部其实就是调用`runHttpQuery`方法, 执行完请求之后就`res.status(200).send(graphqlResponse)`进行响应.
 
 ## setHeaders.ts
 
@@ -190,11 +270,3 @@ export const setHeaders = (
 ```
 
 2333 这个猜不对感觉可以转行了
-
-## VercelApollo.ts
-
-这个文件应该是负责文件上传的, 暂时跳过
-
-
-
-这样看下来可以魔改一个`koa`的实现啊!
