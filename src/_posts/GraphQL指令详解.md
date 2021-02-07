@@ -6,22 +6,9 @@ date: 2021-2-4
 title: 你不知道的GraphQL Directives
 ---
 
-## 大纲
+原本是想写了发掘金的, 但是感觉这东西100个前端仔最多四五个用过, 写了也没人看, 我写个寂寞(而且还要铺垫知识). 索性直接用自己看的懂的话简单记录下了.
 
-
-
-- GraphQL 内置指令实现(https://github.com/graphql/graphql-js/blob/a546aca77922beb2fee949ea0ad7c9234f7006fd/src/type/directives.js)
-- Apollo-Server中指令相关源码(https://github.com/apollographql/apollo-server/blob/b7a91df76acef748488eedcfe998917173cff142/packages/apollo-server-core/src/utils/isDirectiveDefined.ts)
-  - GraphQL Tools使用部分
-- 实现常用指令
-  - TypeGraphQL局限
-  - 原生指令实现与基于SchemaDirectiveVisitor实现
-- SchemaDirectiveVisitor内部方法解析
-- GD的思想
-
-
-
-## 草稿
+## 正文
 
 指令是被注入到(或者说书写在)GraphQL Schema中的特殊语法, 以`@`开头, 例如
 
@@ -53,8 +40,6 @@ query {
 ```typescript
 const { format = defaultFormat } = this.args;
 ```
-
-
 
 GraphQLDirective在源码中的定义:
 
@@ -151,7 +136,7 @@ export interface GraphQLDirectiveConfig {
   }
   ```
 
-  这里的11种对应着`DirectiveLocation`中类型系统的11种(我猜根级别的是GraphQL运行时内置使用的)
+  这里的11种对应着`DirectiveLocation`中类型系统的11种(我猜根级别的是GraphQL运行时内置使用的, 所以不能使用?)
 
 - args, 这里是一个key-object的map, 类型定义如下:
 
@@ -172,6 +157,31 @@ export interface GraphQLDirectiveConfig {
   定义了参数相关的配置.
 
   注意, 这里的`deprecationReason`应该是参数的废弃原因说明, 因为在摸索指令的时候我发现只有`GraphQLField`等少数类型上有`isDeprecated`和`deprecationReason`, 也就是只有`visitFieldDefinition`等少数方法(`GraphQLField`是此方法的参数之一)可以废弃掉字段(毕竟不能废弃掉整个对象类型甚至整个schema吧)
+
+  也可以看一下GraphQL内置指令`@include`中的实现:
+
+  ```javascript
+  export const GraphQLIncludeDirective = new GraphQLDirective({
+    name: 'include',
+    description:
+      'Directs the executor to include this field or fragment only when the `if` argument is true.',
+    locations: [
+      DirectiveLocation.FIELD,
+      DirectiveLocation.FRAGMENT_SPREAD,
+      DirectiveLocation.INLINE_FRAGMENT,
+    ],
+    args: {
+      if: {
+        type: new GraphQLNonNull(GraphQLBoolean),
+        description: 'Included when true.',
+      },
+    },
+  });
+  ```
+
+  这里的`args.if`就是参数~
+
+  > 我本来想顺便看看内置指令是怎么解析的, 但搜`include`没找到相关代码
 
 - isRepeatable, 指令是否可以重复, 应该是指同一location上能否有多个同名指令.
 
@@ -382,3 +392,7 @@ export class AuthDirective extends SchemaDirectiveVisitor {
   ```
 
   因为常量枚举不能被作为参数传给注册函数.
+
+
+
+TypeGraphQL由于是用TS来书写GraphQL Schema, 因此必然没有原生的SDL那么自由, 比如没法将枚举应用在联合类型 枚举 枚举值上. 这一点估计要等作者着手解决这个问题, 比如在registerEnum的选项中新增指令相关的配置.
