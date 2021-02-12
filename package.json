@@ -22,6 +22,6 @@
     "vuepress-theme-meteorlxy": "^1.5.1"
   },
   "devDependencies": {
-    "@vuepress/plugin-google-analytics": "^1.2.0"
+    "@vuepress/plugin-google-analytics": "^1.8.1"
   }
 }
