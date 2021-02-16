@@ -10,7 +10,7 @@ title: RxJS常用操作符记录
 
 - [x] 创建
 - [x] 转换
-- [ ] 过滤
+- [x] 过滤
 - [ ] 组合
 - [ ] 多播(multicast)
 - [ ] 错误处理
@@ -60,3 +60,34 @@ title: RxJS常用操作符记录
 - pairwise 从第2项开始成对的发送当前值与前一个值 [1,2]
 - partition 将源一分为二: 满足与不满足的
 - pluck 将源值映射为源值的键值
+
+
+
+## 过滤操作符
+
+- delay 为源的所有值进行延时
+- distinct 返回与之前源ob发出的值都不同的值(keySelector + Set)
+  - distinctUntilChanged 返回所有与前一项不同的值
+  - distinctUntilKeyChanged  可接收keySelector版本的distinctUntilChanged 
+- elementAt 发出发送序列的第N个值
+- filter
+- first 返回第一个值(或是第一个通过筛选的值)
+  - last
+- ignoreElements  忽略所有项, 直接调用源的complete/error
+- single  返回单个匹配项
+- skip跳过前N个值
+  - skipLast
+  - skipUntil 跳过直到notifierOb开始发送值
+- take
+  - takeLast
+  - takeUntil 持续发送直到notifierOb开始发送值
+  - takeWhile 发出满足条件的每个值, 并在出现不满足的值时立即完成
+- debounce 由durationOb决定的一段时间内都没有一个新的源值发送, 才会发出下一个值
+  - debounceTime
+- throttle 发出一个值 沉默 直到第二个ob发送(或者完成) 继续下一个值 重复
+  - throttleTime
+- audit debounce返回沉默期间的第一个值, audit返回最后一个, durationOb持续的时间内会持续忽略源值. 最开始时durationOb是禁用的, 第一个源值到达, 启用durationOb, 持续忽略接下来的源值, durationOb到期禁用, 返回这段时间的最后一个值
+  - auditTime
+- sample 同步版本的audit/debounce? durationOb发出时发送最新的源值
+  - sampleTime
+
