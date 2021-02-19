@@ -11,7 +11,7 @@ title: RxJS常用操作符记录
 - [x] 创建
 - [x] 转换
 - [x] 过滤
-- [ ] 组合
+- [x] 组合
 - [ ] 多播(multicast)
 - [ ] 错误处理
 - [ ] 工具
@@ -90,4 +90,22 @@ title: RxJS常用操作符记录
   - auditTime
 - sample 同步版本的audit/debounce? durationOb发出时发送最新的源值
   - sampleTime
+
+
+
+## 组合操作符
+
+- combineLatest 接收多个ob 每次发出所有ob最新值的组合 (在任意一个ob发送时)
+- combineAll 接收一个高阶ob 收集所有内部ob 在最外部ob完成时订阅所有已经收集的ob 并通过combineLatest打平
+- concat 顺序的连结多个ob 在一个结束后才会开始下一个
+  - concatAll 就像组合版本的combineAll(combineAll是a1, b2, 而concatAll是a, 1, b, 2)
+- exhaust 专一版本的mergeAll 会在当前专注的内部ob未完成时丢弃掉其他ob发出的值
+- switch 花心版本的exhaust 会丢弃掉当前专注的ob订阅新的有值发出的ob
+- forkJoin 在接受的所有ob完成时输出每个ob最后的结果组成的值
+- merge 将多个ob组合到一个(不是combine那种), 可控制并发
+  - mergeAll 通过同时发出高阶ob内部ob发出的值将高阶ob打平
+- race
+- startWith 在pipe中存在时, 会先发出其内部的ob再发出源ob
+- withLatestForm 在源ob发出值时使用此值和输入ob的最新值计算输出值
+- zip 组合多个ob 最后得到一个ob 值来自于输入ob按顺序计算而来(同样不是combine那种组合)
 
