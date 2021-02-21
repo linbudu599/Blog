@@ -13,12 +13,14 @@ title: RxJS常用操作符记录
 - [x] 过滤
 - [x] 组合
 - [ ] 多播(multicast)
-- [ ] 错误处理
-- [ ] 工具
+- [x] 错误处理
+- [x] 工具
 - [ ] 条件/布尔
 - [ ] 数学/聚合
 
 不愧是"海量API", 我人看傻了, 一边学一边记录常用的好了.
+
+会先把大致的作用都过一遍再回过头来补充代码示例, 这样可以互相比较嘛.
 
 ## 创建操作符
 
@@ -109,3 +111,29 @@ title: RxJS常用操作符记录
 - withLatestForm 在源ob发出值时使用此值和输入ob的最新值计算输出值
 - zip 组合多个ob 最后得到一个ob 值来自于输入ob按顺序计算而来(同样不是combine那种组合)
 
+
+
+## 错误处理
+
+- catchError 通过返回一个新的ob来捕获错误
+- retry(count) 返回源ob在发生错误时不断重新从头尝试直到最大重试次数的ob
+- retryWhen((errors)=>ob) 在源ob发生error时 将error传递给notifier进行判断 当notifier进入complete或者error时 对源ob的订阅也将进入complete或者error 如果notifier不断继续 则会从头开始订阅源ob
+
+
+
+## 工具操作符
+
+- tap(原先的do) 在每次源ob发送值时 执行一次操作 不影响返回的ob
+- delay 延迟源ob发送
+
+  - delayWhen 由接收的ob决定延迟时间
+- materialize 将ob包装为Notification类型, 此对象是`{kind:"", value:"", error:undefined, hasValue: true}`的形式
+  - dematerialize: 相反, 从Notification对象到ob代表着的发送(即 next complete error)
+- observerOn: 基于指定的调度器重新发出通知, 如`Scheduler.animationFrame`
+  - subscribeOn: 基于指定的调度器订阅
+- timeInterval 发出包含当前值以及与前一次发出值间隔的时间(基于调度器的now方法获取每次的当前时间, 再计算时间差)
+- timestamp 在产生值时 为其附加一个时间戳
+- timeout 在指定时间内没有ob产生时抛出错误
+  - timeoutWith 在指定时间内没有ob产生时订阅另一个源ob
+- toArray 将源ob的所有值收集到数组中
+- toPromise
