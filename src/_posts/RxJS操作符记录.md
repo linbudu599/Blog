@@ -1,4 +1,5 @@
 ---
+
 category: Record
 tags:
   - RxJS
@@ -15,8 +16,12 @@ title: RxJS常用操作符记录
 - [ ] 多播(multicast)
 - [x] 错误处理
 - [x] 工具
-- [ ] 条件/布尔
-- [ ] 数学/聚合
+- [x] 条件/布尔
+- [x] 数学/聚合
+- [x] Subject
+- [ ] Scheduler
+
+
 
 不愧是"海量API", 我人看傻了, 一边学一边记录常用的好了.
 
@@ -136,4 +141,238 @@ title: RxJS常用操作符记录
 - timeout 在指定时间内没有ob产生时抛出错误
   - timeoutWith 在指定时间内没有ob产生时订阅另一个源ob
 - toArray 将源ob的所有值收集到数组中
-- toPromise
+
+
+
+## 条件/布尔
+
+- 为直到完成时也没有值产生的源ob指定一个默认值
+- every 判断源ob发出的每个值是否都满足指定条件
+- find 发出源ob中第一个满足条件的值
+  - findIndex
+- isEmpty 在源ob为空的情况下发出一个发出true的ob
+
+
+
+## 数学/聚合
+
+- count 在源ob完成时告知发送值的数量
+- max 通过比较函数找到源ob发出值中最大的一项
+  - min
+- reduce 在源ob发出的值上应用累加器函数 并返回最终的累加值
+
+
+
+## 调度器
+
+
+
+## Subject
+
+- Subject是特殊的ob, 它能够在多个观察者之间共享一个ob(在正常情况下, 一个ob的多个观察者, 每一个都会重新执行这个ob)
+
+- Subject实际上也是EventEmitter, 它将维护多个观察者的注册信息
+
+- multicast操作符在底层实际上使用了Subject
+
+- Subject可以被订阅, 并且订阅者并不能区分自己订阅的是ob还是sub, 但subscribe方法实际上不会直接调用ob, 而是像addEventListener那样新增一个订阅者到注册信息中
+
+- Subject可以通过next error complete方法来将值/状态传递给所有观察者们
+
+  ```typescript
+  const sub = new Subject();
+  
+  sub.subscribe((x) => console.log(`1-${x}`));
+  sub.subscribe((x) => console.log(`2-${x}`));
+  
+  sub.next('item1');
+  sub.next('item2');
+  sub.next('item3');
+  
+  sub.complete();
+  
+  1-item1
+  2-item1
+  1-item2
+  2-item2
+  1-item3
+  2-item3
+  ```
+
+- Subject同时还可以作为观察者, 也就是直接被传给ob的subscribe方法
+
+  ```typescript
+  const sourceOb = from([1, 2, 3]);
+  
+  const sub = new Subject();
+  
+  sub.subscribe((x) => console.log(`1-${x}`));
+  sub.subscribe((x) => console.log(`2-${x}`));
+  
+  sourceOb.subscribe(sub);
+  
+  1-1
+  2-1
+  1-2
+  2-2
+  1-3
+  2-3
+  ```
+
+  这里可以理解为, sub上注册的订阅者现在将多播的订阅sourceOb
+
+  > Subject是将任意ob执行同时在多个订阅者之间共享的唯一方式
+
+### 多播的ob
+
+> 多播的ob会将通知通过一个可能拥有多个订阅者的subject发送出去
+
+multicast的底层原理: 观察者订阅subject, 由subject进行注册, 然后再由subject去订阅源ob, 将源ob的值多播给多个观察者:
+
+```typescript
+const sourceOb = from([1, 2, 3]);
+
+const sub = new Subject();
+
+const multicasted = sourceOb.pipe(multicast(sub));
+
+// 实际上即是sub.subscribe
+multicasted.subscribe((x) => console.log(`1-${x}`));
+multicasted.subscribe((x) => console.log(`2-${x}`));
+
+sourceOb.subscribe(sub);
+```
+
+### 引用计数
+
+ 假设要实现第一个观察者到达时自动连结, 最后一个观察者取消订阅时自动取消共享, 使用手动订阅需要自己一个个处理subscribe和unsubscribe, 在这种情况下, 可以将refCount方法加入到管道中, 它会在第一个订阅者出现时让多播ob自动启动(共享), 在最后一个订阅者离开时取消共享.
+
+```typescript
+const source = interval(500);
+const subject = new Subject();
+const refCounted = source.pipe(multicast(subject), refCount());
+
+let subscription1: Subscription, subscription2: Subscription;
+
+console.log('observerA subscribed');
+// 会自动开始共享ob 因为第一个订阅者出现了
+subscription1 = refCounted.subscribe({
+  next: (v) => console.log(`observerA: ${v}`),
+});
+
+setTimeout(() => {
+  console.log('observerB subscribed');
+  subscription2 = refCounted.subscribe({
+    next: (v) => console.log(`observerB: ${v}`),
+  });
+}, 600);
+
+setTimeout(() => {
+  console.log('observerA unsubscribed');
+  subscription1.unsubscribe();
+}, 1200);
+
+// 取消共享 因为没有观察者了
+setTimeout(() => {
+  console.log('observerB unsubscribed');
+  subscription2.unsubscribe();
+}, 2000);
+```
+
+### BehaviorSubject
+
+新增了"当前值"的概念, 会保存被发送的最新值, 并且当新的观察者参与订阅时会立即接收到当前值.
+
+```typescript
+const subject = new BehaviorSubject(0); // 0 is the initial value
+
+subject.subscribe({
+  next: (v) => console.log(`observerA: ${v}`),
+});
+
+subject.next(1);
+subject.next(2);
+
+subject.subscribe({
+  next: (v) => console.log(`observerB: ${v}`),
+});
+
+subject.next(3);
+
+observerA: 0
+observerA: 1
+observerA: 2
+observerB: 2
+observerA: 3
+observerB: 3
+```
+
+第二个观察者接收到的首个值就是2
+
+
+
+## ReplaySubject
+
+类似前一个, 但它可以发送旧的值给订阅者(根据实例化时的缓冲长度决定)
+
+```typescript
+subject.subscribe({
+  next: (v) => console.log(`observerA: ${v}`)
+});
+ 
+subject.next(1);
+subject.next(2);
+subject.next(3);
+subject.next(4);
+ 
+subject.subscribe({
+  next: (v) => console.log(`observerB: ${v}`)
+});
+ 
+subject.next(5);
+
+// observerA: 1
+// observerA: 2
+// observerA: 3
+// observerA: 4
+// observerB: 2
+// observerB: 3
+// observerB: 4
+// observerA: 5
+// observerB: 5
+```
+
+B加入时, 最新的3个值: 2 3 4会被发送给B
+
+> 除了指定缓冲长度, 还可以指定缓存时间
+
+## AsyncSubject
+
+只有当当前共享的Ob完成时, 才会将最后一个值发送给所有订阅者
+
+> 只发送一个值, 类似last操作符
+
+```typescript
+const subject = new AsyncSubject();
+ 
+subject.subscribe({
+  next: (v) => console.log(`observerA: ${v}`)
+});
+ 
+subject.next(1);
+subject.next(2);
+subject.next(3);
+subject.next(4);
+ 
+subject.subscribe({
+  next: (v) => console.log(`observerB: ${v}`)
+});
+ 
+subject.next(5);
+subject.complete();
+ 
+// Logs:
+// observerA: 5
+// observerB: 5
+```
+
