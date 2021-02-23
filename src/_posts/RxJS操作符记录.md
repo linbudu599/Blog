@@ -13,7 +13,7 @@ title: RxJS常用操作符记录
 - [x] 转换
 - [x] 过滤
 - [x] 组合
-- [ ] 多播(multicast)
+- [x] 多播(multicast)
 - [x] 错误处理
 - [x] 工具
 - [x] 条件/布尔
@@ -30,14 +30,16 @@ title: RxJS常用操作符记录
 ## 创建操作符
 
 - of 接收一个参数并转换为ob
+- ajax 基于Ajax请求创建一个ob
 - from 接收一组参数并转为一组ob
 - fromEvent 从DOM事件产生ob
 - fromEventPattern 使用addHandler与removeHanler创建ob
 - defer 惰性创建
+- generate 基于条件与迭代器不断产生值, (initial, continueConditionFunc, iteratorFunc), 在条件为true时不断进行迭代
 - empty 抛出一个直接complete的ob 使用NEVER替代
 - throwError 抛出一个直接error的ob
 - never 不会产生值也不会complete的ob 使用NEVER替代
-- interval 定时器流
+- interval 定时器流, 
 - timer 可延时的interval
 - range 产生范围ob
 - repeat 重复源ob产生的流
@@ -67,6 +69,11 @@ title: RxJS常用操作符记录
 - pairwise 从第2项开始成对的发送当前值与前一个值 [1,2]
 - partition 将源一分为二: 满足与不满足的
 - pluck 将源值映射为源值的键值
+- window 在内部ob发出项时, 将源ob的值分割为嵌套的ob
+  - 就像buffer, 但这里是将多个值组合成嵌套的ob
+  - windowCount 每个窗口值有上限版本
+  - windowToggle 以opening作为窗口开始, 以closing作为结束
+  - windowWhen 每当closing有值产生时发出当前的窗口并开始下一个
 
 
 
@@ -90,9 +97,9 @@ title: RxJS常用操作符记录
   - takeUntil 持续发送直到notifierOb开始发送值
   - takeWhile 发出满足条件的每个值, 并在出现不满足的值时立即完成
 - debounce 由durationOb决定的一段时间内都没有一个新的源值发送, 才会发出下一个值
-  - debounceTime
+  - debounceTime 源ob发送一个值后, 在指定时间内都没有下一个值, 才会发出当前的这个值
 - throttle 发出一个值 沉默 直到第二个ob发送(或者完成) 继续下一个值 重复
-  - throttleTime
+  - throttleTime 发出一个值后会沉默指定时间 在此过程中源ob的输出都将被忽略  指定时间结束后才能够发送下一个值
 - audit debounce返回沉默期间的第一个值, audit返回最后一个, durationOb持续的时间内会持续忽略源值. 最开始时durationOb是禁用的, 第一个源值到达, 启用durationOb, 持续忽略接下来的源值, durationOb到期禁用, 返回这段时间的最后一个值
   - auditTime
 - sample 同步版本的audit/debounce? durationOb发出时发送最新的源值
@@ -102,19 +109,39 @@ title: RxJS常用操作符记录
 
 ## 组合操作符
 
-- combineLatest 接收多个ob 每次发出所有ob最新值的组合 (在任意一个ob发送时)
+- combineLatest 接收多个ob 在任意一个输入ob产生值时发出源ob与所有输入ob最新值的组合
+  - 会在每个ob都至少发出一个值时才输出第一个值
+  - 如果每个ob都只发送一个值, 并且计算需要的只是每个ob的最后一个值, 使用forkJoin更好
 - combineAll 接收一个高阶ob 收集所有内部ob 在最外部ob完成时订阅所有已经收集的ob 并通过combineLatest打平
 - concat 顺序的连结多个ob 在一个结束后才会开始下一个
-  - concatAll 就像组合版本的combineAll(combineAll是a1, b2, 而concatAll是a, 1, b, 2)
-- exhaust 专一版本的mergeAll 会在当前专注的内部ob未完成时丢弃掉其他ob发出的值
-- switch 花心版本的exhaust 会丢弃掉当前专注的ob订阅新的有值发出的ob
-- forkJoin 在接受的所有ob完成时输出每个ob最后的结果组成的值
-- merge 将多个ob组合到一个(不是combine那种), 可控制并发
+  - concatAll 就像组合版本的combineAll(combineAll是[a, 1], [b, 2]的"组合", 而concatAll是a, 1, b, 2这样的"连结")
+  - 如果对ob的执行顺序无要求, 可以使用merge
+- merge 将多个ob组合到一个(不是combine那种将多个产生值合并为一个再输出的组合, 也不是concat那种一个完了再下一个, 就像是可并发的concat), 可控制并发
+  - 如果对顺序有要求, 应当使用concat
   - mergeAll 通过同时发出高阶ob内部ob发出的值将高阶ob打平
-- race
+- exhaust 专一版本的mergeAll 会在当前专注的内部ob未完成时丢弃掉其他ob发出的值
+- switch 花心版本的exhaust 会丢弃掉当前专注的ob订阅新的有值发出的ob, 常用于请求竞态
+- forkJoin 在接受的所有ob完成时输出每个ob最后的结果组成的值
+  - 适用于只关心每个ob的最后一个值的情况
+  - 如果有一个ob没有完成, 那么forkJoin永远不会产生值
+  - 如果有ob失败了, 将失去其他ob的值, 此时应当使用catchError进行兜底
+  - 如果需要正确的得到每个ob与值的相对应关系, 应该使用zip
+- race 
 - startWith 在pipe中存在时, 会先发出其内部的ob再发出源ob
-- withLatestForm 在源ob发出值时使用此值和输入ob的最新值计算输出值
-- zip 组合多个ob 最后得到一个ob 值来自于输入ob按顺序计算而来(同样不是combine那种组合)
+  - endWith
+  - 如果想要在计算完成时执行操作, 但不想要产生一个新值, 应该使用finalize
+- withLatestFrom 在源ob发出值时使用此值和输入ob的最新值计算输出值
+- zip 组合多个ob 最后得到一个ob 值来自于输入的ob按顺序计算而来
+
+
+
+## 多播
+
+- multicast 将一个ob在多个订阅者之间共享, 通常会先将订阅者添加到Subject上, 再由Subject监听多播ob, 见下方Subject相关
+- share 就像自带refCount的multicast
+- shareReplay 在share的基础上还能够缓存最后N个值
+  - 通常在有副作用或者复杂计算时, 为了避免其在多个订阅者中都进行执行, 或者后续加入的订阅者需要能够访问先前的值.
+- publish 需要手动调用connect的multicast/share, 就像是先注册到订阅者列表中, 手动决定何时开始发布值
 
 
 
@@ -141,16 +168,19 @@ title: RxJS常用操作符记录
 - timeout 在指定时间内没有ob产生时抛出错误
   - timeoutWith 在指定时间内没有ob产生时订阅另一个源ob
 - toArray 将源ob的所有值收集到数组中
+- finalize 在ob结束后执行操作
 
 
 
 ## 条件/布尔
 
-- 为直到完成时也没有值产生的源ob指定一个默认值
-- every 判断源ob发出的每个值是否都满足指定条件
+- defaultIfEmpty 为直到完成时也没有值产生的源ob指定一个默认值
+- every 判断源ob发出的每个值是否都满足指定条件, 如果是, 则返回true
 - find 发出源ob中第一个满足条件的值
   - findIndex
 - isEmpty 在源ob为空的情况下发出一个发出true的ob
+- sequenceEqual依次比较两个源ob产生的每个值, 在完全相等时返回true
+- iif 在订阅将被发起时才决定订阅哪一个ob(三元表达式)
 
 
 
@@ -311,7 +341,7 @@ observerB: 3
 
 
 
-## ReplaySubject
+### ReplaySubject
 
 类似前一个, 但它可以发送旧的值给订阅者(根据实例化时的缓冲长度决定)
 
@@ -346,7 +376,7 @@ B加入时, 最新的3个值: 2 3 4会被发送给B
 
 > 除了指定缓冲长度, 还可以指定缓存时间
 
-## AsyncSubject
+### AsyncSubject
 
 只有当当前共享的Ob完成时, 才会将最后一个值发送给所有订阅者
 

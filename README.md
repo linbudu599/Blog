@@ -9,5 +9,3 @@ Visit in [https://linbudu.top/](https://linbudu.top/).
 
 - [BACK_UP_VERCEL](https://linbudu-blog.vercel.app/)
 - [BACK_UP_NETLIFY](https://linbudu-blog.netlify.app/)
-
-This Blog is in a [migration](https://github.com/linbudu599/the-great-gatsby) to [GatsbyJS](https://www.gatsbyjs.org/).
