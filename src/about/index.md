@@ -12,7 +12,20 @@ title: 关于我
   - `React`
   - `TypeScript`
   - `GraphQL(Apollo)`
-  - `NodeJS`(`Express` / `Koa` / `Egg` / `Midway`)
-  - 一点小程序(`Taro` / 原生)
-  - 一点Flutter
-- Working on something cute :)
+  - `NodeJS`(`Express` / `Koa` / `Egg` / `Midway` / `Nest` / `Serverless`)
+  - 小程序(`Taro` / 原生)
+  - `Flutter`
+  - `Angular`
+- **Working on something cute :p**
+
+- **Some Interesting Works**
+  - [GraphQL-Explorer-Server](https://github.com/linbudu599/GraphQL-Explorer-Server) GraphQL(Server Side) Stack Usage Collection.
+  - [Midway-GraphQL-Starter](https://github.com/linbudu599/Midway-GraphQL-Starter) Midway + GraphQL Develop Made Easy.
+  - [Nx-Todo-App](https://github.com/linbudu599/Nx-Todo-App) Angular(React) + Nest Monorepo Project Practice By @Nrwl/Nx.
+  - Gatsby-Starter-Penumbra (WIP) Gatsby Starter Inspired By [Vuepress-Theme-Meteorlxy](https://github.com/meteorlxy/vuepress-theme-meteorlxy)
+  - Serein(WIP) To Develop More Love :heartpulse:.
+  - Nest-OSS ALi-Cloud OSS Module Integration With NestJS.
+  - Parcel-Tsx-Template(Refactoring).
+  - @Prnumbra/CLI(Refactoring).
+  - **More Items on Prototype  / Construction / Enhancing / Refactoring**
+
