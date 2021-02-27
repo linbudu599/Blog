@@ -4,7 +4,7 @@ category: Record
 tags:
   - RxJS
 date: 2021-2-14
-title: RxJS常用操作符记录
+title: RxJS学习记录
 ---
 
 ## 整理进度
@@ -20,6 +20,7 @@ title: RxJS常用操作符记录
 - [x] 数学/聚合
 - [x] Subject
 - [ ] Scheduler
+- [x] [太狼老师的教程](https://zhuanlan.zhihu.com/p/23464709)
 
 
 
@@ -405,4 +406,114 @@ subject.complete();
 // observerA: 5
 // observerB: 5
 ```
+
+
+
+## 太狼老师的教程
+
+### 一
+
+要实现的功能:
+
+- 输入字符, 敲击回车/点击ADD, 创建一个Todo Item并清空输入框
+- 点击一个TodoItem来完成它
+- 移除TodoItem
+
+> 这篇文章使用的RxJS版本是5.x, 也就是说在6.x使用需要把链式调用转换为`.pipe`调用
+
+```typescript
+import { Observable } from "rxjs";
+import { createTodoItem } from "./lib";
+
+const $input = <HTMLInputElement>document.querySelector(".todo-val");
+const $list = <HTMLUListElement>document.querySelector(".list-group");
+const $add = document.querySelector(".button-add");
+
+const enter$ = Observable.fromEvent<KeyboardEvent>($input, "keydown").filter(
+  // 监听enter键作为一个单独的流
+  (r) => r.keyCode === 13
+);
+
+// add键的点击同理
+const clickAdd$ = Observable.fromEvent<MouseEvent>($add, "click");
+
+// 将enter与add点击监听合并为一个流
+const input$ = enter$.merge(clickAdd$);
+
+const item$ = input$
+  // 提取输入值
+  .map(() => $input.value)
+  // 去空
+  .filter((r) => r !== "")
+  // 返回一个DOM片段
+  .map(createTodoItem)
+  // 使用do来执行副作用/DOM操作等
+  .do((ele: HTMLLIElement) => {
+    $list.appendChild(ele);
+    // 清空输入框
+    $input.value = "";
+  })
+  .publishReplay(1)
+  .refCount();
+
+const toggle$ = item$
+  // mergeMap 对每个值进行一次映射 并使用mergeAll展平最后的结果
+  .mergeMap(($todoItem) =>
+    // 将item映射到item的点击事件
+    Observable.fromEvent<MouseEvent>($todoItem, "click")
+      // 仅关心item被点击
+      .filter((e) => e.target === $todoItem)
+      // 再将每次点击映射回item
+      .mapTo($todoItem)
+  )
+  .do(($todoItem: HTMLElement) => {
+    // 处理样式(标识状态)
+    if ($todoItem.classList.contains("done")) {
+      $todoItem.classList.remove("done");
+    } else {
+      $todoItem.classList.add("done");
+    }
+  });
+
+const remove$ = item$
+  .mergeMap(($todoItem) => {
+    const $removeButton = $todoItem.querySelector(".button-remove");
+    return Observable.fromEvent($removeButton, "click").mapTo($todoItem);
+  })
+  .do(($todoItem: HTMLElement) => {
+    // 从 DOM 上移掉 todo item
+    const $parent = $todoItem.parentNode;
+    $parent.removeChild($todoItem);
+  });
+
+const app$ = toggle$.merge(remove$).do((r) => console.log(r));
+
+app$.subscribe();
+
+// lib
+export const createTodoItem = (val: string) => {
+  const result = <HTMLLIElement>document.createElement("LI");
+  result.classList.add("list-group-item");
+  const innerHTML = `
+    ${val}
+    <button type="button" class="btn btn-default button-remove" aria-label="right Align">
+      <span class="glyphicon glyphicon-remove" aria-hidden="true"></span>
+    </button>
+  `;
+  result.innerHTML = innerHTML;
+  return result;
+};
+```
+
+主要关注:
+
+- 由于add键点击与enter的效果相同, 所以可以将这两个流合并(merge)
+- 为每一个item进行一次映射, 然后展平内部的所有ob >>> mergeMap
+- 将item映射到item的点击事件, 过滤target不为对应item的点击事件, 再将满足条件的点击事件映射回(mapTo)item, 然后在do中对这个item进行操作
+
+- 由于ob默认是单播的, 即会为每一个订阅者进行一次独特的执行. 这里假设先点击了toggle, 执行完毕后点击remove, remove会重新去订阅, 但此时已经没有流会产生(因为没有输入事件了), 因此需要将此ob多播, 猜测publishReplay即为shareReplay, 思路类似, refCount则用于自动启用?
+
+
+
+## 二
 
