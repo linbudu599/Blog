@@ -517,3 +517,118 @@ export const createTodoItem = (val: string) => {
 
 ## 二
 
+实现功能:
+
+- 回车/add后发送请求, 在请求返回后清空输入框并基于结果生成todo, 在请求返回前回车/add时, 比对输入框当前值与上一个值是否相同, 仅在不想同时才会取消掉上次请求并发送新请求(竞态)
+- 点击item时发送请求, 间隔300ms内的点击只会发出一次
+- 每次输入字符会在停止200ms后发送一个请求, 搜索是否有匹配的todo, 若有则高亮匹配项. 如果在上一次搜索返回前输入了新字符, 则取消掉上一个
+
+```typescript
+import { Observable, Subject } from "rxjs";
+import {
+  createTodoItem,
+  mockToggle,
+  mockHttpPost,
+  search,
+  HttpResponse,
+} from "./lib";
+
+const $input = <HTMLInputElement>document.querySelector(".todo-val");
+const $list = <HTMLUListElement>document.querySelector(".list-group");
+const $add = document.querySelector(".button-add");
+
+// 后面的 search$ 与 enter 应该时从同一个 Observable 中转换出来，这里将 input 事件的 Observable publish 成 muticast
+const type$ = Observable.fromEvent<KeyboardEvent>($input, "keydown")
+  .publish()
+  .refCount();
+
+const search$ = type$
+  .debounceTime(200)
+  .filter((evt) => evt.keyCode !== 13)
+  .map((result) => (<HTMLInputElement>result.target).value)
+  .switchMap(search)
+  .do((result: HttpResponse | null) => {
+    const actived = document.querySelectorAll(".active");
+    Array.prototype.forEach.call(actived, (item: HTMLElement) => {
+      item.classList.remove("active");
+    });
+    if (result) {
+      const item = document.querySelector(`.todo-item-${result._id}`);
+      item.classList.add("active");
+    }
+  });
+
+const enter$ = type$.filter((r) => r.keyCode === 13);
+
+const clickAdd$ = Observable.fromEvent<MouseEvent>($add, "click");
+
+const input$ = enter$.merge(clickAdd$);
+
+const clearInputSubject$ = new Subject<any>();
+
+const item$ = input$
+  .map(() => $input.value)
+  .filter((r) => r !== "")
+  // 使输入框值不变时无法走到请求取消的环节
+  // 返回与之前源ob都不同的值
+  // .distinct()
+  // 避免在输入值相同时也过滤掉ob
+  // flushes会清空缓存：flushes会被订阅，并在完成时清空缓存
+  .distinct(null, clearInputSubject$)
+  // 当ob内部流动的值同样是ob时  订阅最新的一个 将其的值传给下一个操作符 并取消对上一个的订阅
+  // 实际上就是先switch然后map
+  .switchMap(mockHttpPost)
+  .map(createTodoItem)
+  .do((ele: HTMLLIElement) => {
+    $list.appendChild(ele);
+    $input.value = "";
+  })
+  .publishReplay(1)
+  .refCount();
+
+const toggle$ = item$
+  .mergeMap(($todoItem) => {
+    return (
+      Observable.fromEvent<MouseEvent>($todoItem, "click")
+        // 300ms内只会发出一次
+        .debounceTime(300)
+        .filter((e) => e.target === $todoItem)
+        .mapTo({
+          data: {
+            _id: $todoItem.dataset["id"],
+            isDone: $todoItem.classList.contains("done"),
+          },
+          $todoItem,
+        })
+    );
+  })
+  .switchMap((result) =>
+    mockToggle(result.data._id, result.data.isDone)
+      // 映射回原对象
+      .mapTo(result.$todoItem)
+  );
+
+const remove$ = item$
+  .mergeMap(($todoItem) => {
+    const $removeButton = $todoItem.querySelector(".button-remove");
+    return Observable.fromEvent($removeButton, "click").mapTo($todoItem);
+  })
+  .do(($todoItem: HTMLElement) => {
+    // 从 DOM 上移掉 todo item
+    const $parent = $todoItem.parentNode;
+    $parent.removeChild($todoItem);
+  });
+
+const app$ = toggle$.merge(remove$, search$).do((r) => {
+  console.log(r);
+});
+
+app$.subscribe();
+```
+
+注意点:
+
+- 多播ob的应用场景, 及派生ob
+- distinct的flushes
+
+### 三
