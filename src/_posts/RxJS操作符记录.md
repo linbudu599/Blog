@@ -632,3 +632,238 @@ app$.subscribe();
 - distinct的flushes
 
 ### 三
+
+- 文件上传: 断点续传与恢复/分片/进度展示
+
+> 后面会用框架重构
+
+```typescript
+import { Observable, Subscriber, Subject } from "rxjs";
+// spark-md5 没有第三方 .d.ts 文件，这里用 commonjs 风格的 require 它
+// 如果未再 tsconfig.json 中设置 noImplicitAny: true 且 TypeScript 版本大于 2.1 则也可以用
+// import * as SparkMD5 from 'spark-md5' 的方式引用
+const SparkMD5 = require("spark-md5");
+// @warn memory leak
+const $attachment = document.querySelector(".attachment");
+const $progressBar = document.querySelector(".progress-bar") as HTMLElement;
+const apiHost = "http://127.0.0.1:5000/api";
+
+interface FileInfo {
+  fileSize: number;
+  fileMD5: string;
+  lastUpdated: string;
+  fileName: string;
+}
+
+interface ChunkMeta {
+  fileSize: number;
+  chunkSize: number;
+  chunks: number;
+  fileKey: string;
+}
+
+type Action = "pause" | "resume" | "progress" | "complete";
+
+export class FileUploader {
+  // 有文件进入时触发
+  // 原始流
+  private file$ = Observable.fromEvent($attachment, "change")
+    .map((r: Event) => (r.target as HTMLInputElement).files[0])
+    .filter((f) => !!f);
+
+  private click$ = Observable.fromEvent($attachment, "click")
+    // 过滤子节点冒泡
+    .map((e: Event) => e.target)
+    .filter((e: HTMLElement) => e === $attachment)
+    // 1-2-3 上传-暂停-继续
+    // scan会不断生成这几个状态
+    .scan((acc: number, val: HTMLElement) => {
+      if (val.classList.contains("glyphicon-paperclip")) {
+        return 1;
+      }
+      if (acc === 2) {
+        return 3;
+      }
+      return 2;
+    }, 3)
+    .filter((v) => v !== 1)
+    // 根据状态改变icon样式
+    .do((v) => {
+      console.log(v);
+      if (v === 2) {
+        this.action$.next({ name: "pause" });
+        $attachment.classList.remove("glyphicon-pause");
+        $attachment.classList.add("glyphicon-play");
+      } else {
+        this.action$.next({ name: "resume" });
+        this.buildPauseIcon();
+      }
+    })
+    .map((v) => ({ action: v === 2 ? "PAUSE" : "RESUME", payload: null }));
+
+  private action$ = new Subject<{
+    name: Action;
+    payload?: any;
+  }>();
+
+  private pause$ = this.action$.filter((ac) => ac.name === "pause");
+  private resume$ = this.action$.filter((ac) => ac.name === "resume");
+
+  // 进度流
+  private progress$ = this.action$
+    .filter((action) => action.name === "progress")
+    .map((action) => action.payload)
+    .distinctUntilChanged((x: number, y: number) => x - y >= 0)
+    .do((r) => {
+      const percent = Math.round(r * 100);
+      $progressBar.style.width = `${percent}%`;
+      $progressBar.firstElementChild.textContent = `${
+        percent > 1 ? percent - 1 : percent
+      } %`;
+    })
+    .map((r) => ({ action: "PROGRESS", payload: r }));
+
+  public uploadStream$ = this.file$
+    .switchMap(this.readFileInfo)
+    .switchMap((i) =>
+      Observable.ajax
+        // 获取分片信息(并不是实际上传)
+        .post(`${apiHost}/upload/chunk`, i.fileinfo)
+        .map((r) => {
+          // 按照返回的分片信息进行分片
+          const blobs = this.slice(
+            i.file,
+            r.response.chunks,
+            r.response.chunkSize
+          );
+          return { blobs, chunkMeta: r.response };
+        })
+    )
+    // 创建暂停按钮
+    .do(() => this.buildPauseIcon())
+    .switchMap(({ blobs, chunkMeta }) => {
+      const uploaded: number[] = [];
+      const dists = blobs.map((blob, index) => {
+        let currentLoaded = 0;
+        return this.uploadChunk(chunkMeta, index, blob).do((r) => {
+          currentLoaded = r.loaded / chunkMeta.fileSize;
+          uploaded[index] = currentLoaded;
+          const percent = uploaded.reduce((acc, val) => acc + (val ? val : 0));
+          // 计算进度
+          this.action$.next({ name: "progress", payload: percent });
+        });
+      });
+
+      // 并发上传所有分片(并发度3)
+      const uploadStream = Observable.from(dists).mergeAll(this.concurrency);
+
+      // 所有分片上传完毕后输出值
+      // 再映射到本次切片的元数据chunkMeta
+      return Observable.forkJoin(uploadStream).mapTo(chunkMeta);
+    })
+    // 上传分片
+    .switchMap((r: ChunkMeta) =>
+      Observable.ajax
+        .post(`${apiHost}/upload/chunk/${r.fileKey}`)
+        // 将请求映射到上传状态
+        .mapTo({
+          action: "UPLOAD_SUCCESS",
+          payload: r,
+        })
+    )
+    .do(() => {
+      $progressBar.firstElementChild.textContent = "100 %";
+      // restore icon
+      $attachment.classList.remove("glyphicon-pause");
+      $attachment.classList.add("glyphicon-paperclip");
+      ($attachment.firstElementChild as HTMLInputElement).disabled = false;
+    })
+    // 与过程流 点击流合并
+    .merge(this.progress$, this.click$);
+
+  constructor(private concurrency = 3) {}
+
+  // side effect
+  private buildPauseIcon() {
+    $attachment.classList.remove("glyphicon-paperclip");
+    $attachment.classList.add("glyphicon-pause");
+    ($attachment.firstElementChild as HTMLInputElement).disabled = true;
+  }
+
+  // 读取文件信息
+  // 拿到文件流后会附带文件信息与MD5信息
+  // 用于uploadSream$的第一次switchMap
+  private readFileInfo(
+    file: File
+  ): Observable<{ file: File; fileinfo: FileInfo }> {
+    const reader = new FileReader();
+    const spark = new SparkMD5.ArrayBuffer();
+    reader.readAsArrayBuffer(file);
+    return Observable.create(
+      (observer: Subscriber<{ file: File; fileinfo: FileInfo }>) => {
+        reader.onload = (e: Event) => {
+          spark.append((e.target as FileReader).result);
+          const fileMD5 = spark.end();
+          observer.next({
+            file,
+            fileinfo: {
+              fileMD5,
+              fileSize: file.size,
+              lastUpdated: file.lastModifiedDate.toISOString(),
+              fileName: file.name,
+            },
+          });
+          observer.complete();
+        };
+        return () => {
+          if (!reader.result) {
+            console.warn("read file aborted");
+            reader.abort();
+          }
+        };
+      }
+    );
+  }
+
+  private slice(file: File, n: number, chunkSize: number): Blob[] {
+    const result: Blob[] = [];
+    for (let i = 0; i < n; i++) {
+      const startSize = i * chunkSize;
+      const slice = file.slice(
+        startSize,
+        i === n - 1 ? startSize + (file.size - startSize) : (i + 1) * chunkSize
+      );
+      result.push(slice);
+    }
+    return result;
+  }
+
+  private uploadChunk(
+    meta: ChunkMeta,
+    index: number,
+    blob: Blob
+  ): Observable<ProgressEvent> {
+    const host = `${apiHost}/upload/chunk/${meta.fileKey}?chunk=${
+      index + 1
+    }&chunks=${meta.chunks}`;
+    return Observable.create((subscriber: Subscriber<ProgressEvent>) => {
+      const ajax$ = Observable.ajax({
+        url: host,
+        body: blob,
+        method: "post",
+        crossDomain: true,
+        headers: { "Content-Type": "application/octet-stream" },
+        // 进度获取
+        progressSubscriber: subscriber,
+      })
+        // 在暂停流有输出时 停止输出值
+        .takeUntil(this.pause$)
+        // 在恢复流有输出时 重复
+        .repeatWhen(() => this.resume$);
+      const subscription = ajax$.subscribe();
+      return () => subscription.unsubscribe();
+    }).retryWhen(() => this.resume$);
+  }
+}
+```
+
