@@ -26,32 +26,152 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
 - 基础概念
 
   - action
-    - createAction: 有Payload则需要传入`props<T>()`
+
+    - [x] createAction: 有Payload则需要传入`props<T>()`
+
   - reducer
-    - initialState
-      - plain
-      - adapter
-    - FEATURE_KEY
-    - on(action, (state) => modifiedState)
-    - _reducer 与 reducer
-    - [ ] Feature State 注册
-  - effects
+
+    - [x] initialState
+      - [x] plain
+      - [x] adapter
+    - [x] FEATURE_KEY
+    - [x] on(action, (state) => modifiedState)
+    - [x] _reducer 与 reducer
+    - [x] Feature State 注册
+
   - selectors
-    - createSelector((state) => state.a, (a) => a.b)
-    - createFeatureSelector()
-    - combination
-    - [ ] 重置缓存
-    - [ ] this.store.select() 与 this.store.pipe(selector())
-    - [ ] 对选取结果进一步的pipe处理
-  - [ ] Meta-Reducers (Mw in Redux)
-  - [ ] 注入式Reducer
-  - facade
-  - [ ] effects
+
+    - [x] createSelector((state) => state.a, (a) => a.b)
+
+    - [x] with props
+
+    - [x] createFeatureSelector()
+
+    - [x] combination
+
+    - [x] 重置缓存
+
+    - [x] this.store.select() 与 this.store.pipe(selector())
+
+      > 直接调用select可以不为Store传入泛型
+
+    - [x] 对选取结果进一步的pipe处理
+
+  - [x] Meta-Reducers (Mw in Redux)
+
+  - [x] 注入式Reducer
+
+  - [ ] facade
+
+  - [x] effects
+
+    - 类似于dva/icestore的使用方式, 监听到对应的action >>> 触发effect >>> 在effect完成后dispatch一个新的action(一般负责携带返回的数据填充store)
+    - 同一组effect放在一个类中, 多个effect由xxx$ = this.actions$.pipe()的方式分别定义, 通常会注入service layer到类中
+    - 在监听到action --- 派发新的action 中间, 可以任意使用RxJS的操作符来进行各种方便的操作(实际上从ofType开始也都是放在一个pipe中进行的)
+    - 如果不使用service, 也可以直接使用@nrwl/angular提供的封装好的fetch方法, 里面内置了run onSuccess onError方法
+    - effect类需要在EffectsModule中注册
+    - EffectsModule同样也有forRoot和forFeature方法, 来约束module能进行的操作 
+    - 如果在pipe中需要使用store中的数据, 可以使用` concatLatestFrom(action => this.store.select(fromBooks.getCollectionBookIds))`这种方式
+    - 如果这是一个不需要dispatch(比如在pipe的最后使用tap判断下数据, 调用window.alert这种API)的effect, 可以在第二个参数传入dispatch: false
+
   - [ ] RouterStore
-  - [ ] Adapter
+
+  - [x] Entity
+
+    用于管理集合类型的实体状态适配器
+
+    - 减少用于创建管理model集合的模板代码, adapter中会提供getInitialState和getSelectors方法
+    - 提供高性能CRUD操作来管理实体集合, addOne, addMany, updateOne, updateMany等
+
+    ```typescript
+    // 实体的全局状态
+    // EntityState的泛型是集合中单个项的类型
+    export interface BookEntityState extends EntityState<Book> {
+      selectedBookId: string | null;
+      globalProp: boolean;
+    }
+    
+    // 集合主键的获取
+    export const selectBookId = (book: Book): string => book.id;
+    
+    // 集合的排序依据
+    export const sortByTitle = (bookA: Book, bookB: Book): number =>
+      bookA.volumeInfo.title.localeCompare(bookB.volumeInfo.title);
+    
+    // 集合对应的适配器上提供了getInitialState getSelectors 以及集合的操作方法
+    export const booksAdapter: EntityAdapter<Book> = createEntityAdapter<Book>({
+      selectId: selectBookId,
+      sortComparer: sortByTitle,
+    });
+    
+    // 使用适配器的方法修改集合
+    export const booksEntityReducer = createReducer(
+      initialEntityState,
+      on(addBookEntity, (state, { book }) => booksAdapter.addOne(book, state)),
+      on(addBooksEntity, (state, { books }) => booksAdapter.addMany(books, state)),
+      on(updateBookEntity, (state, { update }) =>
+        booksAdapter.updateOne(update, state)
+      ),
+      on(updateBooksEntity, (state, { updates }) =>
+        booksAdapter.updateMany(updates, state)
+      )
+    );
+    
+    export const getSelectedBookId = (state: BookEntityState) =>
+      state.selectedBookId;
+    
+    // 供selector使用 进一步简化选择器代码
+    export const {
+      selectIds: selectBookIds,
+      selectEntities: selectBookEntities,
+      selectAll: selectAllBooks,
+      selectTotal: selectTotalBooks,
+    } = booksAdapter.getSelectors();
+    
+    // 首级选择器必须使用EntityState作为泛型
+    export const selectBooksStateEntity = createFeatureSelector<fromBooks.BookEntityState>(
+      'books'
+    );
+    
+    export const selectBookIds = createSelector(
+      selectBooksStateEntity,
+      // 相当于fromBooks.selectBookIds(BooksState)
+      fromBooks.selectBookIds
+    );
+    
+    export const selectAllBook = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectAllBooks
+    );
+    export const selectUserTotal = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectTotalBooks
+    );
+    
+    export const selectBookEntities = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectBookEntities
+    );
+    
+    export const selectCurrentBookId = createSelector(
+      selectBooksStateEntity,
+      fromBooks.getSelectedBookId
+    );
+    
+    export const selectCurrentBook = createSelector(
+      selectBooksStateEntity,
+      selectCurrentBookId,
+      (bookEntities, bookId) => bookEntities[bookId]
+    );
+    
+    ```
+
   - [ ] ComponentStore
+
   - [ ] Data
+
   - [ ] View
+
   - models: 作为其他文件的类型定义
 
 - Nx
@@ -66,8 +186,11 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
 - Ng注册
 
   - StoreModule
+    - forRoot
+    - forFeature
   - StoreRouterConnectingModule
-  - EffectsModule
+
+- EffectsModule
+
   - StoreDevtoolsModule
 
-  
