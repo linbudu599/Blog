@@ -74,7 +74,59 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
     - 如果在pipe中需要使用store中的数据, 可以使用` concatLatestFrom(action => this.store.select(fromBooks.getCollectionBookIds))`这种方式
     - 如果这是一个不需要dispatch(比如在pipe的最后使用tap判断下数据, 调用window.alert这种API)的effect, 可以在第二个参数传入dispatch: false
 
-  - [ ] RouterStore
+  - [x] RouterStore
+
+    之前的react-router-redux, 现在的connected-react-router
+
+    作用就是为了在路由切换周期内去自动的dispatch action, 或者说监听路由的状态. 通常会使用来自路由状态的数据进行一些额外的操作
+
+    - setup: StoreModule.forRoot中的featureReducer和routerReducer(导出自'@ngrx/router-store'包), AppRoutingModule, StoreRouterConnectingModule, 均在全局AppModule中注册
+
+    - 使用featureSelector + getSelectors, 获取来自于routerReducer专属的选择器
+
+      ```typescript
+      import { getSelectors, RouterReducerState } from '@ngrx/router-store';
+      import { createFeatureSelector } from '@ngrx/store';
+      
+      export const selectRouter = createFeatureSelector<RouterReducerState>('router');
+      
+      export const {
+        selectCurrentRoute, // select the current route
+        selectFragment, // select the current route fragment
+        selectQueryParams, // select the current route query params
+        selectQueryParam, // factory function to select a query param
+        selectRouteParams, // select the current route params
+        selectRouteParam, // factory function to select a route param
+        selectRouteData, // select the current route data
+        selectUrl, // select the current url
+      } = getSelectors(selectRouter);
+      ```
+
+    - 使用路由选择器进一步封装:
+
+      ```typescript
+      import { createFeatureSelector, createSelector } from '@ngrx/store';
+      import { selectRouteParams } from '../router.selectors';
+      import { carAdapter, CarState } from './car.reducer';
+      
+      export const carsFeatureSelector = createFeatureSelector<CarState>('cars');
+      
+      const { selectEntities, selectAll } = carAdapter.getSelectors();
+      
+      export const selectCarEntities = createSelector(
+        carsFeatureSelector,
+        selectEntities
+      );
+      
+      export const selectCar = createSelector(
+        selectCarEntities,
+        selectRouteParams,
+        (cars, { carId }) => cars[carId]
+      );
+      
+      ```
+
+  		将selectRouteParams和selectCarEntities组合起来, 就能够基于store和路由状态进行选择
 
   - [x] Entity
 
