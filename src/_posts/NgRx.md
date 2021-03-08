@@ -218,7 +218,17 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
     
     ```
 
-  - [ ] ComponentStore
+  - [x] ComponentStore
+
+    - 和`@ngrx/store`是独立的, 但一起使用也不错,component-store中可以拿到全局store的数据.
+    - 使用方法更简单, component-store内部就是select/updater/effect这几个方法.
+      - select可以是防抖的, 通常会用一个附带的effect来搭配完成竞态等处理
+      - updater分为setState和patchState
+      - effect可以直接传入一个内部各种pipe最后返回值的函数,也可以再加一个依赖项
+    - 使用场景:
+      - 本地的UI状态, 以组件自治的思路划分
+      - 让服务基于ComponentStore扩展, 并且把所有的相关逻辑都塞到服务里.
+        - 可以直接以整个服务作为provider, 或者以ComponentStore作为provider.
 
   - [ ] Data
 

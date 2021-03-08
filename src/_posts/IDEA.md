@@ -8,10 +8,19 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 ### NodeJS
 
 - [ ] Prisma2, 下一代ORM, 不仅仅是ORM
+  
   - [x] [Demo仓库](https://github.com/linbudu599/Prisma-Article-Example)
+  
 - [ ] NodeJS 多进程实战: 基于Puppeteer的定时爬虫
+
+- [ ] NodeJS 中的Stream解析
+
 - [ ] Midway-Serverless实战: 淘系技术出品Serverless框架
+
+  > 一体化? 正好2.0 Vite + Prisma 了
+
 - [ ] NestJS: 入门 + 实战 + 搭建工程模板
+  
   - [x] Demo
 
 
@@ -33,9 +42,13 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 
 - [ ] GraphQL Code Generator: 一行命令让你少写一堆代码
 
+  - [x] Demo
+
   > 这名字有点笨比啊, 算了等真写了再说
 
 - [ ] GenQL: TypeSafe GraphQL Query(Mutation) Builder 实战 + 源码解析
+
+  - [x] Demo
 
 - [x] GraphQL Directive解析
 
@@ -43,11 +56,19 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 
   - [x] [Demo仓库](https://github.com/linbudu599/GraphQL-Explorer-Server)
 
-- [ ] GraphQL-Explorer-Client: 打造你的GraphQL全栈项目(Apollo)
+- [ ] GraphQL-Explorer-Client: 打造你的GraphQL全栈项目(Apollo or Relay ?)
 
 - [x] 在MidwayJS中使用GraphQL
 
   - [x] [Demo仓库](https://github.com/linbudu599/Midway-GraphQL-Starter)
+
+
+
+## Flutter
+
+- [ ] Dart快速入门
+
+  > 以TypeScript语法快速入门Dart
 
 
 
@@ -57,7 +78,7 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 
 - [ ] Gatsby-Starter-Penumbra 推广 + 讲解
 
-- [ ] 原理相关? 好像没啥兴趣
+- [ ] 原理相关? 暂时没啥兴趣
 
 - [ ] BlitzJS 下一代前端框架的趋势: 一体化
 
@@ -66,6 +87,8 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
   > 带上常用测试技巧? mock stub spy这些
 
 - [ ] 基于IceStore管理你的React应用数据流
+
+  > 推广, 但是确实好用
 
 
 
@@ -79,7 +102,7 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 
 ### Angular
 
-- [ ] Angular11: 笨重还是严谨?
+- [ ] Angular11?
   - [x] Demo
 - [ ] 基于Nx打造你的Angular + Nest Monorepo
   - [x] [Demo仓库](https://github.com/linbudu599/Nx-Todo-App)
@@ -88,15 +111,21 @@ title: (置顶) 筹备中 & 有计划 的文章Idea
 
 
 
-### Dev
-
-- [ ] 不要再为ts-node抓脑壳了!
-
-  > ts-node-dev + tsconfig-paths
+### Common
 
 - [ ] TypeScript 装饰器编译解析
 
+  > 元数据 & Reflect-Metadata & 依赖注入 & TypeDI源码
+
 - [ ] 快速上手GitHub Actions
+
+- [ ] 值得关注的TC39提案
+
+- [ ] Serein 推广+讲解
+
+  > 目前后端都还没写完呢, 先鸽置吧
+  
+- [ ] ...
 
 
 
