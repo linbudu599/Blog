@@ -11,9 +11,9 @@ title: NgRx 快速入门(WIP)
 
 > 本文进度
 >
-> - [ ] 完成NgRx基本的文档阅读
-> - [ ] 将对应的代码整理到 Nx-Todo-App > NgRx-Practice 中
-> - [ ] 比对Redux系列中的库
+> - [x] 完成NgRx基本的文档阅读
+> - [x] 将对应的代码整理到 Nx-Todo-App > NgRx-Practice 中
+> - [x] 比对Redux系列中的库
 > - [ ] 草稿
 > - [ ] 讲人话, 发文章, 西内!
 
@@ -61,19 +61,17 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
 
   - [x] 注入式Reducer
 
-  - [ ] facade
-
   - [x] effects
 
     - 类似于dva/icestore的使用方式, 监听到对应的action >>> 触发effect >>> 在effect完成后dispatch一个新的action(一般负责携带返回的数据填充store)
-    - 同一组effect放在一个类中, 多个effect由xxx$ = this.actions$.pipe()的方式分别定义, 通常会注入service layer到类中
+  - 同一组effect放在一个类中, 多个effect由xxx$ = this.actions$.pipe()的方式分别定义, 通常会注入service layer到类中
     - 在监听到action --- 派发新的action 中间, 可以任意使用RxJS的操作符来进行各种方便的操作(实际上从ofType开始也都是放在一个pipe中进行的)
     - 如果不使用service, 也可以直接使用@nrwl/angular提供的封装好的fetch方法, 里面内置了run onSuccess onError方法
     - effect类需要在EffectsModule中注册
     - EffectsModule同样也有forRoot和forFeature方法, 来约束module能进行的操作 
     - 如果在pipe中需要使用store中的数据, 可以使用` concatLatestFrom(action => this.store.select(fromBooks.getCollectionBookIds))`这种方式
     - 如果这是一个不需要dispatch(比如在pipe的最后使用tap判断下数据, 调用window.alert这种API)的effect, 可以在第二个参数传入dispatch: false
-
+  
   - [x] RouterStore
 
     之前的react-router-redux, 现在的connected-react-router
@@ -85,7 +83,7 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
     - 使用featureSelector + getSelectors, 获取来自于routerReducer专属的选择器
 
       ```typescript
-      import { getSelectors, RouterReducerState } from '@ngrx/router-store';
+    import { getSelectors, RouterReducerState } from '@ngrx/router-store';
       import { createFeatureSelector } from '@ngrx/store';
       
       export const selectRouter = createFeatureSelector<RouterReducerState>('router');
@@ -101,11 +99,11 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
         selectUrl, // select the current url
       } = getSelectors(selectRouter);
       ```
-
+  
     - 使用路由选择器进一步封装:
 
       ```typescript
-      import { createFeatureSelector, createSelector } from '@ngrx/store';
+    import { createFeatureSelector, createSelector } from '@ngrx/store';
       import { selectRouteParams } from '../router.selectors';
       import { carAdapter, CarState } from './car.reducer';
       
@@ -125,7 +123,7 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
       );
       
       ```
-
+  
   		将selectRouteParams和selectCarEntities组合起来, 就能够基于store和路由状态进行选择
 
   - [x] Entity
@@ -133,10 +131,10 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
     用于管理集合类型的实体状态适配器
 
     - 减少用于创建管理model集合的模板代码, adapter中会提供getInitialState和getSelectors方法
-    - 提供高性能CRUD操作来管理实体集合, addOne, addMany, updateOne, updateMany等
-
+  - 提供高性能CRUD操作来管理实体集合, addOne, addMany, updateOne, updateMany等
+  
     ```typescript
-    // 实体的全局状态
+  // 实体的全局状态
     // EntityState的泛型是集合中单个项的类型
     export interface BookEntityState extends EntityState<Book> {
       selectedBookId: string | null;
@@ -217,11 +215,11 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
     );
     
     ```
-
+  
   - [x] ComponentStore
 
     - 和`@ngrx/store`是独立的, 但一起使用也不错,component-store中可以拿到全局store的数据.
-    - 使用方法更简单, component-store内部就是select/updater/effect这几个方法.
+  - 使用方法更简单, component-store内部就是select/updater/effect这几个方法.
       - select可以是防抖的, 通常会用一个附带的effect来搭配完成竞态等处理
       - updater分为setState和patchState
       - effect可以直接传入一个内部各种pipe最后返回值的函数,也可以再加一个依赖项
@@ -229,11 +227,7 @@ Flux式的数据流, 同样是action >>> reducer >>> Immutable State, 但又有�
       - 本地的UI状态, 以组件自治的思路划分
       - 让服务基于ComponentStore扩展, 并且把所有的相关逻辑都塞到服务里.
         - 可以直接以整个服务作为provider, 或者以ComponentStore作为provider.
-
-  - [ ] Data
-
-  - [ ] View
-
+  
   - models: 作为其他文件的类型定义
 
 - Nx
