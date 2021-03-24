@@ -283,5 +283,252 @@ const user = await getConnection()
 
   
 
+在这一部分的最后，我们来简单的介绍下Prisma的使用流程，在正文中，我们会一步步详细介绍Prisma的使用，包括单表、多表级联以及Prisma与GraphQL的奇妙化学反应。
 
 
+
+- 首先，创建一个名为`prisma`的文件夹，在内部创建一个`schema.prisma`文件
+
+  > 如果你使用的是VS Code，可以安装Prisma这一扩展来获得`.prisma`的语法高亮
+
+- 在schema中定义你的数据库类型、路径以及你的数据库表结构，示例如下：
+
+  ```prisma
+  model Todo {
+    id        Int      @id @default(autoincrement())
+    title     String
+    content   String?
+    finished  Boolean  @default(false)
+    
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+  ```
+
+- 运行`prisma generate`命令，prisma将为你生成`Prisma Client`，内部结构是这样的：
+
+  ![image-20210324100621450](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324100621450.png)
+
+- 在你的文件中导入`Prisma Client`即可使用：
+
+  ```typescript
+  import { PrismaClient } from "./prisma/client";
+  
+  const prisma = new PrismaClient();
+  
+  async function createTodo(title: string, content?: string) {
+    const res = await prisma.todo.create({
+      data: {
+        title,
+        content,
+      },
+    });
+    return res;
+  }
+  ```
+
+  每张表都会被存放在`prisma.model`的命名空间下。
+
+如果看完简短的介绍你已经感觉这玩意有点好玩了，那么在跟着本文完成实践后，你可能也会默默把手上的项目迁移到Prisma（毕设也可以安排上）~
+
+
+
+## 上手Prisma
+
+你可以在 [Prisma-Article-Example](https://github.com/linbudu599/Prisma-Article-Example) 找到完整的示例，以下的例子我们会从一个空文件夹开始。
+
+### 项目初始化
+
+- 创建一个空文件夹，执行`npm init -y`
+
+- 全局安装`@prisma/cli`：`npm install prisma -g`
+
+  > `@prisma/cli` 包已被更名为 `prisma`
+  >
+  > 全局安装`@prisma/cli`是为了后面执行相关命令时方便些~
+
+- 安装必要的依赖：
+
+  ```bash
+  npm install @prisma/client sqlite3 prisma -S
+  npm install typescript @types/node nodemon ts-node -D
+  ```
+
+  > 安装`prisma`到文件夹时会根据你的操作系统下载对应的Query Engine：
+  >
+  > ![](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324102112439.png)
+
+- 执行`prisma version`，确定安装成功。
+
+  ![image-20210324102342154](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324102342154.png)
+
+- 执行`prisma init`，初始化一个Prisma项目（这个命令的侵入性非常低，只会生成`prisma`文件夹和`.env`文件，如果`.env`文件已经存在，则会将需要的环境变量追加到已存在的文件）。
+
+  ![image-20210324102523696](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324102523696.png)
+
+- 查看`.env`文件
+
+  ```text
+  # Environment variables declared in this file are automatically made available to Prisma.
+  # See the documentation for more detail: https://pris.ly/d/prisma-schema#using-environment-variables
+  
+  # Prisma supports the native connection string format for PostgreSQL, MySQL and SQLite.
+  # See the documentation for all the connection string options: https://pris.ly/d/connection-strings
+  
+  DATABASE_URL="postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public"
+  ```
+
+  你会发现这里的数据库默认使用的是postgresql，在本文中为了降低学习成本，我们全部使用SQLite作为数据库，因此需要将变量值修改为`file:../demo.sqlite`
+
+  > 如果你此前没有接触过SQLite，可以理解为这是一个能被当作数据库读写的文件（`.sqlite`后缀），因此使用起来非常容易，也正是因为它是文件，所以需要将`DATABASE_URL`这一变量改为`file://`协议。
+
+  同样的，在Prisma Schema中我们也需要修改数据库类型为`sqlite`：
+
+  ```prisma
+  // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
+  
+  datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+  }
+  
+  generator client {
+    provider = "prisma-client-js"
+  }
+  ```
+
+### 创建数据库
+
+ 在上面的Prisma Schema中，我们只定义了datasource和generator，它们分别负责定义使用的数据库配置和客户端生成的配置，举例来说，默认情况下prisma生成的client会被放置在node_modules下，导入时的路径也是`import { PrismaClient } from "@prisma/client"`，但你可以通过`client.output`命令更改生成的client位置。
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "./client"
+}
+```
+
+这一命令会使得client被生成到``prisma`文件夹下。
+
+> 将client生成到对应的prisma文件夹下使得在monorepo（或者只是多个文件夹的情况）下，每个项目可以方便的使用不同配置的schema生成的client。
+
+我们在Prisma Schema中新增数据库表结构的定义：
+
+```prisma
+datasource db {
+  provider = "sqlite"
+  url      = env("SINGLE_MODEL_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./client"
+}
+
+model Todo {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  finished  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+简单解释下相关语法：
+
+- Int、String等这一类标量会被自动基于数据库类型映射到对应的数据类型。
+- @id 即意为标识此字段为主键，@default()意为默认值，autoincrement与now为prisma内置的函数，类似的内置函数还有uuid、cuid等。
+
+### 客户端生成与使用
+
+现在你可以生成客户端了，执行`prisma generate`：
+
+![image-20210324105558187](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324105558187.png)
+
+还没完，我们的数据库还没创建出来，执行`prisma db push --preview-feature`
+
+![image-20210324110551303](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110551303.png)
+
+> 这个命令也会执行一次`prisma generate`，你可以使用`--skip-generate`跳过这里的client生成。
+
+现在根目录下就出现了`demo.sqlite`文件。
+
+在根目录下创建index.ts：
+
+```typescript
+// index.ts
+import { PrismaClient } from "./prisma/client";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("Prisma!");
+}
+
+main();
+```
+
+> 从使用方式你也可以看出来`PrismaClient`实际上是一个类，所以你可以继承这个类来进行很多扩展操作，在后面我们会提到。
+
+在开始使用前，为了后续学习的简洁，我们使用`nodemon` + `ts-node`，来帮助我们在index.ts发生变化时自动重新执行。
+
+```json
+{
+  "name": "Prisma2-Explore",
+  "restartable": "r",
+  "delay": "500",
+  "ignore": [
+    ".git",
+    "node_modules/**",
+    "/**/*.test.ts",
+    "/**/*.sql",
+    "/prisma/*",
+    "/**/*.graphql",
+    "/**/generated/*",
+    "/**/graphql/*"
+  ],
+  "verbose": true,
+  "execMap": {
+    "": "node",
+    "js": "node --harmony",
+    "ts": "ts-node "
+  },
+  "watch": ["./**/*.ts"],
+}
+```
+
+并将启动脚本添加到package.json：
+
+```json
+{
+   "scripts": {
+    "start": "nodemon index.ts"
+  }
+}
+```
+
+执行`npm start`：
+
+![image-20210324110144559](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110144559.png)
+
+### C R U D
+
+接下来就到了正式使用环节，以下内容会指引你如何使用Prisma来对数据库进行CRUD操作，很有可能你会一边学一边感觉自己之前对ORM的认识都被颠覆了：CRUD还能这么玩？
+
+> 以下代码均在函数main中
+
+- 创建
+
+  ```typescript
+   const createTodo = await prisma.todo.create({
+      data: {
+        title: "Prisma",
+        content: "Learn Prisma CRUD",
+      },
+    });
+    console.log("createTodo: ", createTodo);
+  ```
+
+  ![image-20210324110955713](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110955713.png)
