@@ -8,16 +8,6 @@ title: RxJS学习记录
 
 ## 前言
 
-> 本文进度
->
-> - [x] 常用操作符记录
-> - [x] 太狼老师的教程
-> - [ ] 奇妙比喻 + 宝石图 + ReactiveHow
-> - [ ] 单个范例
-> - [ ] 组合场景
-> - [ ] 草稿
-> - [ ] 文章
-
 ## 整理进度
 
 - [x] 创建
@@ -41,46 +31,146 @@ title: RxJS学习记录
 
 ## 创建操作符
 
-- of 接收一个参数并转换为ob
-- ajax 基于Ajax请求创建一个ob
+- of 接收任意参数并转换为ob
+
+  - scheduler已被弃用，应当将of替换为scheduled操作符
+
+- ajax 基于Ajax请求创建一个ob （导出自rxjs/ajax）
+
+  - 使用方式：
+
+    ```typescript
+    import { ajax } from 'rxjs/ajax';
+    import { map, catchError } from 'rxjs/operators';
+    import { of } from 'rxjs';
+    
+    const obs$ = ajax(`https://api.github.com/users?per_page=5`).pipe(
+      map(userResponse => console.log('users: ', userResponse)),
+      catchError(error => {
+        console.log('error: ', error);
+        return of(error);
+      })
+    );
+    ```
+
+  - 类似于axios，ajax方法也可以接受一个由url、method、headers、body等属性组成的对象
+
 - from 接收一组参数并转为一组ob
+
+  - scheduler已被弃用，应当将of替换为scheduled操作符
+
+  - 可被转化为Observable的类型一览
+
+    ```typescript
+    export type ObservableInput<T> =
+      | Observable<T>
+      | InteropObservable<T>
+      | AsyncIterable<T>
+      | PromiseLike<T>
+      | ArrayLike<T>
+      | Iterable<T>
+      | ReadableStreamLike<T>;
+    ```
+
 - fromEvent 从DOM事件产生ob
+
 - fromEventPattern 使用addHandler与removeHanler创建ob
-- defer 惰性创建
-- generate 基于条件与迭代器不断产生值, (initial, continueConditionFunc, iteratorFunc), 在条件为true时不断进行迭代
-- empty 抛出一个直接complete的ob 使用NEVER替代
-- throwError 抛出一个直接error的ob
-- never 不会产生值也不会complete的ob 使用NEVER替代
-- interval 定时器流, 
-- timer 可延时的interval
-- range 产生范围ob
-- repeat 重复源ob产生的流
+
+- defer 惰性创建，在被订阅时才会调用工厂函数创建一个Ob
+
+  - 相关：
+    - 条件操作符iif：（condition，trueRes=EMPTY，fasleRes=EMPTY），根据条件动态的判断订阅哪个Ob，常和mergeMap一起使用（打平内部Ob）
+
+- generate 基于条件与迭代器不断产生值, (initial, continueConditionFunc, iteratorFunc, resultSelector), 在条件为true时不断进行迭代
+
+- empty 抛出一个直接complete的ob，不返回值，应使用EMPTY替代。
+
+  - 相当于它直接调用`subscript.complete()`
+  - 相关：
+    - isEmpty，如果输入的Observable产生了值，那么它就会返回false。
+    - defaultEmpty，接受一个默认值，如果输入Observable没有产生值，则使用这一操作符的默认值。
+
+- throwError 抛出一个直接error的ob，接受一个工厂函数，用于创建错误实例。
+
+  - 相当于它直接调用`subscript.error()`
+  - 相关：
+    - throwIfEmpty：如果源Ob没有产生值，就会产生一个错误。如果没有指定工厂函数，则使用EmptyError。
+    - catchError：通过返回一个新的ob或者抛出错误来catch管道中的错误。
+
+- never 不会产生值也不会complete的ob。已废弃，使用NEVER替代。
+
+- interval（period）定时器流, 从0开始产生值。
+
+  - 相关：
+    - timeInterval：发出一个对象，包含当前值以及上一个值到当前值的时间间隔
+
+- timer （initialDelay，period）可延时的interval，从0开始产生值。
+
+- range (start, count)产生范围ob。
+
+- repeat （count = Infinity）重复源ob产生的流。
 
 
 
 ## 转换操作符
 
-- buffer 当closingNotifier有输出时才会输出缓冲区数据
-  - bufferCount 指定缓冲区长度
-  - bufferTime 指定缓冲时间
-  - bufferToggle 使用opening+closing控制
-  - bufferWhen 当closing返回的ob发出数据时关闭当前缓冲区, 并立刻准备好下一个
-- concatMap 接收project与resultSelector 相当于在源ob的每个值后附加一连串串行ob(处理完一串才会到下一串, 就像并发为1的mergeMap)
-  - concatMapTo 接收innerOb与resultSelector 源值会被直接替换 并且最后会展平为单个ob来输出
+- buffer 当closingNotifier有输出时才会输出缓冲区数据，以数组的形式
+
+  - 相关：
+    - bufferCount （size，startBufferEvery） 使用固定长度的缓冲区，而非closingNotifier。第二个参数startBufferEvery指定何时开始缓存下一个buffer，如指定为1，则结果如下(size为5)：
+      - 1s [0] -> 2s [0,1] [1] -> 3s [0,1,2] [1,2] [2] ...
+    - bufferTime （bufferTimeSpan，bufferCreationInterval）指定缓冲时间，每隔span秒发送一次缓冲区，每隔interval开启一个缓冲区
+    - bufferToggle （opening：Ob， closingSelector: Func）使用opening+closing控制，opening Ob有值产生时，开启一个新的缓冲区，并在closingSelector返回Ob有值产生时，输出缓冲区内容。
+    - bufferWhen （closingSelector: Func） 当closing返回的ob发出数据时，关闭当前缓冲区, 并立刻准备好下一个
+
+- concatMap （project，resultSelector），相当于在源ob的每个值后附加一连串串行ob(处理完一串才会到下一串, 就像并发为1的mergeMap)。
+
+  - 用于产生高阶Ob（concat、concatAll是组合操作符，一个接收Ob，一个无参数，concatAll在管道中的上一级通常会map回来新的Ob或是，然后concatAll会依次订阅这些Ob）
+
+  - 实例
+
+    ```typescript
+    const source = of(2000, 1000);
+    // map value from source into inner observable, when complete emit result and move to next
+    const example = source.pipe(
+      concatMap(val => of(`Delayed by: ${val}ms`).pipe(delay(val)))
+    );
+    
+    //output: With concatMap: Delayed by: 2000ms, With concatMap: Delayed by: 1000ms
+    const subscribe = example.subscribe(val =>
+      console.log(`With concatMap: ${val}`)
+    );
+    ```
+
+    
+
+  - concatMapTo 接收innerOb与resultSelector,源值会被直接替换 并且最后会展平为单个ob来输出
+
 - map mapTo 映射处理
+
 - merge 合并多个ob源(可控制并发)
   - mergeMap 对每个值进行一次映射, 并且会使用mergeAll展平, 最后只会输出1个
   - mergeMapTo
   - mergeAll 将ob内的ob拿出来展平, 可控制并发
+  
 - scan 对每个源值应用累加器, 返回中间ob与最终ob
   - mergeScan 将累加器的中间与返回ob合并到输出ob
+  
 - switchMap 接收project与resultSelector 将源值映射后合并到最终ob 最终只会发出最新投射的值
+  
+  - 能够取消副作用
+  - 切换到一个全新的Ob
   - switchMapTo
   - switch 通过只发出ob内部的最新ob来展平一个高阶ob
+  
 - groupBy 基于keySelector/eleSelector进行分组
+
 - pairwise 从第2项开始成对的发送当前值与前一个值 [1,2]
+
 - partition 将源一分为二: 满足与不满足的
+
 - pluck 将源值映射为源值的键值
+
 - window 在内部ob发出项时, 将源ob的值分割为嵌套的ob
   - 就像buffer, 但这里是将多个值组合成嵌套的ob
   - windowCount 每个窗口值有上限版本
@@ -121,28 +211,105 @@ title: RxJS学习记录
 
 ## 组合操作符
 
-- combineLatest 接收多个ob 在任意一个输入ob产生值时发出源ob与所有输入ob最新值的组合
-  - 会在每个ob都至少发出一个值时才输出第一个值
-  - 如果每个ob都只发送一个值, 并且计算需要的只是每个ob的最后一个值, 使用forkJoin更好
-- combineAll 接收一个高阶ob 收集所有内部ob 在最外部ob完成时订阅所有已经收集的ob 并通过combineLatest打平
-- concat 顺序的连结多个ob 在一个结束后才会开始下一个
-  - concatAll 就像组合版本的combineAll(combineAll是[a, 1], [b, 2]的"组合", 而concatAll是a, 1, b, 2这样的"连结")
+- combineLatest 接收多个ob 在任意一个输入ob产生值时发出源ob与所有输入ob最新值（最新值是相对于单个Ob来说的）的组合
+  - 会在每个ob都至少发出一个值时才输出第一个值（与withLatestFrom一致）
+  - 如果每个ob都只发送一个值, 或者计算需要的只是每个ob的最后一个值, 使用forkJoin更好
+  
+- combineAll 接收一个高阶ob 收集所有内部ob 在最外部ob完成时订阅所有已经收集的ob 并通过combineLatest打平。
+
+  - 具体地说，在源Ob完成后，对内部ob应用combineLatest 
+
+  - 实例：
+
+    ```typescript
+    import { take, map, combineAll } from 'rxjs/operators';
+    import { interval } from 'rxjs';
+    
+    const source$ = interval(1000).pipe(take(2));
+    
+    const example$ = source$.pipe(
+      map(val =>
+        interval(1000).pipe(
+          map(i => `Result (${val}): ${i}`),
+          take(5)
+        )
+      )
+    );
+    
+    // source$2 比 source$1晚产生1s
+    example$
+      .pipe(combineAll())
+      /*
+      output:
+      ["Result (0): 0", "Result (1): 0"]
+      ["Result (0): 1", "Result (1): 0"]
+      ["Result (0): 1", "Result (1): 1"]
+      ["Result (0): 2", "Result (1): 1"]
+      ["Result (0): 2", "Result (1): 2"]
+      ["Result (0): 3", "Result (1): 2"]
+      ["Result (0): 3", "Result (1): 3"]
+      ["Result (0): 4", "Result (1): 3"]
+      ["Result (0): 4", "Result (1): 4"]
+    */
+      .subscribe(console.log);
+    ```
+
+    
+
+- concat （...obs）顺序的连结多个ob，但是在一个结束后才会开始下一个
+  - concatAll，同样用于处理高阶Ob。它的处理方式是对于返回的内部Ob，一个个的进行订阅。就像组合版本的combineAll(combineAll是[a, 1], [b, 2]的"组合", 而concatAll是a,b,1,2这样的"连结")
+  
+    - 实例
+  
+      ```typescript
+      import { take, concatAll } from 'rxjs/operators';
+      import { interval, of } from 'rxjs';
+      
+      // interval返回的还是Ob，这里之前是个误区，包括of等返回的都是Ob
+      const obs1 = interval(1000).pipe(take(5));
+      const obs2 = interval(500).pipe(take(2));
+      const obs3 = interval(2000).pipe(take(1));
+      //emit three observables
+      const source = of(obs1, obs2, obs3);
+      
+      const example = source.pipe(concatAll());
+      
+      /*
+        output: 0,1,2,3,4,0,1,0
+      */
+      const subscribe = example.subscribe(val => console.log(val));
+      ```
+  
+      
+  
   - 如果对ob的执行顺序无要求, 可以使用merge
-- merge 将多个ob组合到一个(不是combine那种将多个产生值合并为一个再输出的组合, 也不是concat那种一个完了再下一个, 就像是可并发的concat), 可控制并发
+  
+    
+  
+- merge 将多个ob组合到一个(不是combineLatest那种将多个产生值合并为一个再输出, 也不是concat那种一个完了再下一个), 就像是字面意思...的合并到一个Ob。
+  
+  - 有点像zip，但zip是等所有Ob都产生一次值后再以数组发出收集的值。
   - 如果对顺序有要求, 应当使用concat
-  - mergeAll 通过同时发出高阶ob内部ob发出的值将高阶ob打平
-- exhaust 专一版本的mergeAll 会在当前专注的内部ob未完成时丢弃掉其他ob发出的值
-- switch 花心版本的exhaust 会丢弃掉当前专注的ob订阅新的有值发出的ob, 常用于请求竞态
-- forkJoin 在接受的所有ob完成时输出每个ob最后的结果组成的值
+  - mergeAll （concurrent），接收一个产生ob的源ob，通过同时发出高阶ob内部ob发出的值将高阶ob打平。同样会等源ob完成生产所有内部ob后，再订阅这些内部ob？
+  
+- exhaustAll 专一版本的mergeAll 会在当前专注的内部ob未完成时丢弃掉其他ob发出的值
+
+- switchAll 花心版本的exhaust 会丢弃掉当前专注的ob订阅新的有值发出的ob, 常用于请求竞态
+
+- forkJoin（属于静态方法，不会被用在pipe中） 在接受的所有ob完成时输出每个ob最后的结果组成的值
   - 适用于只关心每个ob的最后一个值的情况
   - 如果有一个ob没有完成, 那么forkJoin永远不会产生值
   - 如果有ob失败了, 将失去其他ob的值, 此时应当使用catchError进行兜底
   - 如果需要正确的得到每个ob与值的相对应关系, 应该使用zip
-- race 
+  
+- race 发出最新的值，在遇到错误时，不会做出响应（所以不会被catchError catch到）
+
 - startWith 在pipe中存在时, 会先发出其内部的ob再发出源ob
-  - endWith
+  - endWith 在源ob完成时，发出一个值
   - 如果想要在计算完成时执行操作, 但不想要产生一个新值, 应该使用finalize
+  
 - withLatestFrom 在源ob发出值时使用此值和输入ob的最新值计算输出值
+
 - zip 组合多个ob 最后得到一个ob 值来自于输入的ob按顺序计算而来
 
 
