@@ -59,9 +59,25 @@ title: Prisma，下一代ORM，不仅仅是ORM
 
 ## 前言
 
+本篇文章将会介绍一个NodeJS社区中的ORM：Prisma。文章的大致顺序如下：
+
+
+
+- NodeJS社区中的老牌、传统ORM
+- 传统ORM的Data Mapper 与 Active Record模式
+- Query Builder
+- Prisma的基础环境配置
+- Hello Prisma
+- 从单表CRUD开始
+- 多表、多数据库实战
+- Prisma与GraphQL：全链路类型安全
+- Prisma与一体化框架
+
+
+
 ### NodeJS社区中的ORM
 
-经常写NodeJS的同学应该免不了和ORM打交道，毕竟写原生SQL对技能要求是真的高。ORM的便捷使得很多情况下我们能直观而方便的和数据库打交道（虽然的确有些情况下ORM搞不定），NodeJS社区中主流的ORM主要有这么几个，它们都有各自的一些特色：
+经常写NodeJS的同学应该免不了和ORM打交道，毕竟写原生SQL对于前端同学还是有些苛刻，。ORM的便捷使得很多情况下我们能直观而方便的和数据库打交道（虽然的确有些情况下ORM搞不定），NodeJS社区中主流的ORM主要有这么几个，它们都有各自的一些特色：
 
 - [Sequelize](https://github.com/sequelize/sequelize)，比较老牌的一款ORM，缺点是TS支持不太好，但是社区有[Sequelize-TypeScript](https://github.com/RobinBuschmann/sequelize-typescript)。
 
@@ -110,9 +126,11 @@ title: Prisma，下一代ORM，不仅仅是ORM
   }
   ```
 
-  直观的多吧？
+  比起Sequelize来，直观的多吧？
 
-- [MikroORM](https://github.com/mikro-orm/mikro-orm)，比较新的一个ORM，同样大量基于装饰器语法，亮点在于自动处理所有事务以及实体会在全局保持单例模式，还没有用过。MikroORM定义表结构方式是这样的：
+- [MikroORM](https://github.com/mikro-orm/mikro-orm)，比较新的一个ORM，同样大量基于装饰器语法，亮点在于自动处理所有事务以及表实体会在全局保持单例模式，还没有用过。
+
+  MikroORM定义表结构方式是这样的：
 
   ```typescript
   @Entity()
@@ -134,6 +152,8 @@ title: Prisma，下一代ORM，不仅仅是ORM
   ```
 
 - Mongoose、TypeGoose，MongoDB专有的ORM，这里不做示例。
+
+  - TODO：补充下示例
 
 
 
@@ -171,7 +191,9 @@ await user.save();
 const newUsers = await User.find({ isActive: true });
 ```
 
-TypeORM中，Active Record模式下需要让实体类继承`BaseEntity`类，这样实体类上就具有了各种方法，如`save` `remove` `find`方法等。AR模式最早由 [Martin Fowler](https://en.wikipedia.org/wiki/Martin_Fowler_(software_engineer)) 在 企业级应用架构模式 一书中命名。
+TypeORM中，Active Record模式下需要让实体类继承`BaseEntity`类，这样实体类上就具有了各种方法，如`save` `remove` `find`方法等。AR模式最早由 [Martin Fowler](https://en.wikipedia.org/wiki/Martin_Fowler_(software_engineer)) 在 *企业级应用架构模式* 一书中命名。
+
+> TODO: 英文名
 
 Data Mapper:
 
@@ -239,17 +261,17 @@ mquery({ name: /^match/ })
   .update({ $addToSet: { arr: 4 }}, callback)
 ```
 
-在ORM中，通常不会存在这样的多个方法链式调用，而是通过单个方法+多个参数的方式来操作，这也是我认为Query Builder和ORM的一个重要差异。再来看看TypeORM的Query Builder模式：
+在ORM中，通常不会存在这样的多个方法链式调用，而是通过单个方法+多个参数的方式来操作，这也是Query Builder和ORM的一个重要差异。再来看看TypeORM的Query Builder模式：
 
 ```typescript
 import { getConnection } from "typeorm";
 
 const user = await getConnection()
-.createQueryBuilder()
-.select("user")
-.from(User, "user")
-.where("user.id = :id", { id: 1 })
-.getOne();
+  .createQueryBuilder()
+  .select("user")
+  .from(User, "user")
+  .where("user.id = :id", { id: 1 })
+  .getOne();
 ```
 
 以上的操作其实就相当于`userRepo.find({ id: 1 })`，你可能会觉得QB的写法过于繁琐，但实际上这种模式要灵活的多，和SQL语句的距离也要近的多（你可以理解为每一个链式方法调用都会对最终生成的SQL语句进行一次操作）。
@@ -271,11 +293,13 @@ const user = await getConnection()
 
 ### Prisma
 
-接下来就到了我们本篇文章的主角：[Prisma](https://www.prisma.io/) 。Prisma对自己的定义仍然是NodeJS的ORM，但个人感觉它比普通意义上的ORM要强大得多，独特的Schema定义、比TypeORM更加严谨全面的TS类型定义（尤其是在级联关系中）、更容易上手和更全面的过滤操作符等，很容易让初次接触的人欲罢不能（比如我）。
+接下来就到了我们本篇文章的主角：[Prisma](https://www.prisma.io/) 。Prisma对自己的定义仍然是NodeJS的ORM，但个人感觉它比普通意义上的ORM要强大得多，独特的Schema定义方式、比TypeORM更加严谨全面的TS类型定义（尤其是在级联关系中）、更容易上手和更全面的过滤操作符等，很容易让初次接触的人欲罢不能（比如我）。
 
 简单的介绍下这些特点：
 
-- Schema定义，我们前面看到的ORM都是使用JS/TS文件来定义数据库表结构的，而Prisma不同，它使用`.prisma`后缀的文件来书写独特的Prisma Schema，然后基于schema生成表结构，VS Code有prisma官方提供的高亮、语法检查插件，所以不用担心使用负担。
+- Schema定义，我们前面看到的ORM都是使用JS/TS文件来定义数据库表结构的，而Prisma不同，它使用`.prisma`后缀的文件来书写独特的Prisma Schema，然后基于schema生成表结构，VS Code有prisma官方提供的高亮、语法检查插件，所以不用担心使用负担。同时，这也就意味着围绕Prisma Schema会产生一批generator功能的生态，如typegraphql-prisma就能够基于Prisma Schema生成TypeGraphQL的Class定义，甚至还有CRUD的基本Resolver。
+
+  > TypeGraphQL、Resolver属于GraphQL相关的工具/概念，如果未曾了解过也不要紧。
 
 - TS类型定义，可以说Prisma的类型定义是全覆盖的，查询参数、操作符参数、级联参数、返回结果等等，比TypeORM的都更加完善。
 
