@@ -50,6 +50,8 @@ title: Prisma，下一代ORM，不仅仅是ORM
 
 ### 探索
 
+- [ ] 官方自我阐述 如 https://www.prisma.io/docs/concepts/overview/prisma-in-your-stack/is-prisma-an-orm
+
 - [ ] 大致工作原理
 - [ ] \+ GraphQL：内置DataLoader
 - [ ] GraphQL + TypeScript + TypeGraphQL + GraphQL-Code-Generatot + GenQL + Prisma：全链路类型安全保证
@@ -61,7 +63,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
 
 本篇文章将会介绍一个NodeJS社区中的ORM：Prisma。文章的大致顺序如下：
 
-
+> TODO: 更多铺垫、前言
 
 - NodeJS社区中的老牌、传统ORM
 - 传统ORM的Data Mapper 与 Active Record模式
@@ -77,7 +79,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
 
 ### NodeJS社区中的ORM
 
-经常写NodeJS的同学应该免不了和ORM打交道，毕竟写原生SQL对于前端同学还是有些苛刻，。ORM的便捷使得很多情况下我们能直观而方便的和数据库打交道（虽然的确有些情况下ORM搞不定），NodeJS社区中主流的ORM主要有这么几个，它们都有各自的一些特色：
+经常写Node应用的同学通常免不了要和ORM打交道，毕竟写原生SQL对于大部分前端同学来说真的是一种折磨。ORM的便利性使得很多情况下我们能直观而方便的和数据库打交道（虽然的确有些情况下ORM搞不定），用我们熟悉的JavaScript来花式操作数据库。 NodeJS社区中主流的ORM主要有这么几个，它们都有各自的一些特色：
 
 - [Sequelize](https://github.com/sequelize/sequelize)，比较老牌的一款ORM，缺点是TS支持不太好，但是社区有[Sequelize-TypeScript](https://github.com/RobinBuschmann/sequelize-typescript)。
 
@@ -88,6 +90,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
   const sequelize = new Sequelize('sqlite::memory:');
   
   class User extends Model {}
+  
   User.init({
     username: DataTypes.STRING,
     birthday: DataTypes.DATE
@@ -103,7 +106,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
   })();
   ```
 
-  （我是觉得不那么符合直觉）
+  （我是觉得不那么符合直觉，所以我只在入门时期简单使用过）
 
 - [TypeORM](https://github.com/typeorm/typeorm)，NodeJS社区star最多的一个ORM。也确实很好用，是我用的最多的一个ORM。亮点在基于装饰器语法声明表结构、事务、级联等，以及很棒的TS支持。TypeORM声明表结构是这样的：
 
@@ -126,7 +129,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
   }
   ```
 
-  比起Sequelize来，直观的多吧？
+  比起Sequelize来要直观的多，而且由于通过类属性的方式来定义数据库字段，可以很好的兼容Mixin以及其他使用类似方式的工具库，如TypeGraphQL。
 
 - [MikroORM](https://github.com/mikro-orm/mikro-orm)，比较新的一个ORM，同样大量基于装饰器语法，亮点在于自动处理所有事务以及表实体会在全局保持单例模式，还没有用过。
 
@@ -154,6 +157,43 @@ title: Prisma，下一代ORM，不仅仅是ORM
 - Mongoose、TypeGoose，MongoDB专有的ORM，这里不做示例。
 
   - TODO：补充下示例
+  
+- Bookshelf，一个相对简单一些但也五脏俱全的ORM，基于Knex（Strapi底层的Query Builder，后面会简单介绍）。它的使用方式大概是这样的：
+
+  ```javascript
+  const knex = require('knex')({
+    client: 'mysql',
+    connection: process.env.MYSQL_DATABASE_CONNECTION
+  })
+  // bookshelf 基于 knex，所以需要实例化knex然后传入
+  const bookshelf = require('bookshelf')(knex)
+  
+  const User = bookshelf.model('User', {
+    tableName: 'users',
+    posts() {
+      return this.hasMany(Posts)
+    }
+  })
+  
+  const Post = bookshelf.model('Post', {
+    tableName: 'posts',
+    tags() {
+      return this.belongsToMany(Tag)
+    }
+  })
+  
+  const Tag = bookshelf.model('Tag', {
+    tableName: 'tags'
+  })
+  
+  new User({id: 1}).fetch({withRelated: ['posts.tags']}).then((user) => {
+    console.log(user.related('posts').toJSON())
+  }).catch((error) => {
+    console.error(error)
+  })
+  ```
+
+  另外，一个比较独特的地方是bookshelf支持了插件机制，其他ORM通常通过hook或者subscriber的方式实现类似的功能，如密码存入时进行一次加密等。
 
 
 
@@ -161,7 +201,7 @@ title: Prisma，下一代ORM，不仅仅是ORM
 
 如果你去看了上面列举的ORM文档，你会发现MikroORM的简介中包含这么一句话：`TypeScript ORM for Node.js based on Data Mapper`，而TypeORM的简介中则是`TypeORM supports both Active Record and Data Mapper patterns`。
 
-使用ORM的过程中，你是否了解过 **Data Mapper** 与 **Active Record** 这两种模式的区别？
+先来一个问题，使用ORM的过程中，你是否了解过 **Data Mapper** 与 **Active Record** 这两种模式的区别？
 
 先来看看TypeORM中分别是如何使用这两种模式的：
 
@@ -225,11 +265,11 @@ await userRepository.remove(user);
 const newUsers = await userRepository.find({ isActive: true });
 ```
 
-可以看到在DM模式中，实体类不再能够自己进行数据库操作，而是需要先获取到一个对应到表的“仓库”，然后再调用这个“仓库”上的方法。
+可以看到在Data Mapper模式中，实体类不再能够自己进行数据库操作，而是需要先获取到一个对应到表的“仓库”，然后再调用这个“仓库”上的方法。
 
 
 
-对这两个模式进行比较，很容易发现AR模式要简单的多，而DM模式则更加严谨。那么何时使用这两种模式就很清楚了，如果你在开发比较简单的应用，直接使用AR模式就好了，因为这会减少很多代码。但是如果你在开发规模较大的应用，使用DM模式则能够帮助你更好的维护代码（实体类不再具有访问数据库权限了，只能通过统一的接口(`getRepository` `getManager`等)）。
+对这两个模式进行比较，很容易发现Active Record模式要简单的多，而Data Mapper模式则更加严谨。那么何时使用这两种模式就很清楚了，如果你在开发比较简单的应用，直接使用Active Record模式就好了，因为这会减少很多代码。但是如果你在开发规模较大的应用，使用Data Mapper模式则能够帮助你更好的维护代码（实体类不再具有访问数据库权限了，只能通过统一的接口(`getRepository` `getManager`等)）。
 
 ### Query Builder
 
@@ -276,7 +316,7 @@ const user = await getConnection()
 
 以上的操作其实就相当于`userRepo.find({ id: 1 })`，你可能会觉得QB的写法过于繁琐，但实际上这种模式要灵活的多，和SQL语句的距离也要近的多（你可以理解为每一个链式方法调用都会对最终生成的SQL语句进行一次操作）。
 
-同时在部分情境（如多级级联下）中，QB反而是代码更简洁的那一方，如：
+同时在部分情境（如多级级联下）中，Query Builder反而是代码更简洁的那一方，如：
 
 ```typescript
  const selectQueryBuilder = this.executorRepository
@@ -291,9 +331,66 @@ const user = await getConnection()
 
 以上代码构建了一个包含多张表的级联关系的Query Builder。
 
+> 级联关系如下：
+>
+> - Executor
+>   - tasks -> Task
+>   - relatedRecord -> Record
+> - Task
+>   - substances -> Substance
+> - Record
+>   - recordTask -> Task
+>   - recordAccount -> Account
+>   - recordSubstance -> Substance
+
+再看一个比较主流的Query Builder [knex](https://github.com/knex/knex)，我是在尝鲜[strapi](https://strapi.io/)的过程中发现的，strapi底层依赖于knex去进行数据库交互以及连接池相关的功能，knex的使用大概是这样的：
+
+```javascript
+const knex = require('knex')({
+  client: 'sqlite3',
+  connection: {
+    filename: './data.db',
+  },
+});
+
+try {
+
+  await knex.schema
+    .createTable('users', table => {
+      table.increments('id');
+      table.string('user_name');
+    })
+    .createTable('accounts', table => {
+      table.increments('id');
+      table.string('account_name');
+      table
+        .integer('user_id')
+        .unsigned()
+        .references('users.id');
+    })
+
+  const insertedRows = await knex('users').insert({ user_name: 'Tim' })
+
+  await knex('accounts').insert({ account_name: 'knex', user_id: insertedRows[0] })
+
+  const selectedRows = await knex('users')
+    .join('accounts', 'users.id', 'accounts.user_id')
+    .select('users.user_name as user', 'accounts.account_name as account')
+
+  const enrichedRows = selectedRows.map(row => ({ ...row, active: true }))
+
+} catch(e) {
+  console.error(e);
+};
+```
+
+可以看到knex的链式操作更进了一步，甚至可以链式创建多张数据库表...
+
+
+
 ### Prisma
 
-接下来就到了我们本篇文章的主角：[Prisma](https://www.prisma.io/) 。Prisma对自己的定义仍然是NodeJS的ORM，但个人感觉它比普通意义上的ORM要强大得多，独特的Schema定义方式、比TypeORM更加严谨全面的TS类型定义（尤其是在级联关系中）、更容易上手和更全面的过滤操作符等，很容易让初次接触的人欲罢不能（比如我）。
+接下来就到了我们本篇文章的主角：[Prisma](https://www.prisma.io/) 。Prisma对自己的定义仍然是NodeJS的ORM，但个人感觉它比普通意义上的ORM要强大得多，独特的Schema定义方式、比TypeORM更加严谨全面的TS类型定义（尤其是在级联关系中）、更容易上手和更贴近原生SQL的各种操作符等，很容易让初次接触的人欲罢不能。
 
 简单的介绍下这些特点：
 
@@ -301,19 +398,47 @@ const user = await getConnection()
 
   > TypeGraphQL、Resolver属于GraphQL相关的工具/概念，如果未曾了解过也不要紧。
 
+  一个简单的`schema.prisma`可能是这样的：
+
+  ```prisma
+  // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
+  
+  datasource db {
+    provider = "sqlite"
+    url      = env("SINGLE_MODEL_DATABASE_URL")
+  }
+  
+  generator client {
+    provider = "prisma-client-js"
+    output   = "./client"
+  }
+  
+  model Todo {
+    id        Int      @id @default(autoincrement())
+    title     String   
+    content   String?
+    finished  Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+  ```
+
+  > 是不是感觉即使你没用过，但还是挺好看懂。
+
 - TS类型定义，可以说Prisma的类型定义是全覆盖的，查询参数、操作符参数、级联参数、返回结果等等，比TypeORM的都更加完善。
 
 - 更全面的操作符，如对字符串的查询，Prisma中甚至提供了contains、startsWith、endsWith这种细粒度的操作符供过滤使用（而TypeORM中只能使用[ILike](https://github.com/typeorm/typeorm/blob/c8bf81ed2d47ba0822f8d6267ae1997180db2e31/src/find-options/operator/ILike.ts)这种方法来全量匹配）。（这些操作符的具体作用我们会在后面讲到）
 
   
 
-在这一部分的最后，我们来简单的介绍下Prisma的使用流程，在正文中，我们会一步步详细介绍Prisma的使用，包括单表、多表级联以及Prisma与GraphQL的奇妙化学反应。
+在这一部分的最后，我们来简单的介绍下Prisma的使用流程（环境配置在下一节，这里我们只是先感受一下使用方式），在正文中，我们会一步步详细介绍Prisma的使用，包括单表、多表级联以及Prisma与GraphQL的奇妙化学反应。
 
 
 
 - 首先，创建一个名为`prisma`的文件夹，在内部创建一个`schema.prisma`文件
 
-  > 如果你使用的是VS Code，可以安装Prisma这一扩展来获得`.prisma`的语法高亮
+  > 如果你使用的是VS Code，可以安装Prisma扩展来获得`.prisma`的语法高亮
 
 - 在schema中定义你的数据库类型、路径以及你的数据库表结构，示例如下：
 
@@ -364,6 +489,8 @@ const user = await getConnection()
 ### 项目初始化
 
 - 创建一个空文件夹，执行`npm init -y`
+
+  > yarn、pnpm同理
 
 - 全局安装`@prisma/cli`：`npm install prisma -g`
 
@@ -433,9 +560,11 @@ generator client {
 }
 ```
 
-这一命令会使得client被生成到``prisma`文件夹下。
+这一命令会使得client被生成到`prisma`文件夹下，如：
 
-> 将client生成到对应的prisma文件夹下使得在monorepo（或者只是多个文件夹的情况）下，每个项目可以方便的使用不同配置的schema生成的client。
+![image-20210612174918265](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210612174918265.png)
+
+> 将client生成到对应的prisma文件夹下这一方式使得在monorepo（或者只是多个文件夹的情况）下，每个项目可以方便的使用不同配置的schema生成的client。
 
 我们在Prisma Schema中新增数据库表结构的定义：
 
@@ -462,8 +591,8 @@ model Todo {
 
 简单解释下相关语法：
 
-- Int、String等这一类标量会被自动基于数据库类型映射到对应的数据类型。
-- @id 即意为标识此字段为主键，@default()意为默认值，autoincrement与now为prisma内置的函数，类似的内置函数还有uuid、cuid等。
+- Int、String等这一类标量会被自动基于数据库类型映射到对应的数据类型。标量类型后的`?`意味着这一字段是可选的。
+- `@i` 意为标识此字段为主键，`@default()`意为默认值，`autoincrement`与`now`为prisma内置的函数，分别代表自增主键与字段写入时的时间戳，类似的内置函数还有uuid、cuid等。
 
 ### 客户端生成与使用
 
@@ -471,7 +600,7 @@ model Todo {
 
 ![image-20210324105558187](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324105558187.png)
 
-还没完，我们的数据库还没创建出来，执行`prisma db push --preview-feature`
+还没完，我们的数据库文件（即sqlite文件）还没创建出来，执行`prisma db push`
 
 ![image-20210324110551303](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110551303.png)
 
@@ -506,12 +635,7 @@ main();
   "ignore": [
     ".git",
     "node_modules/**",
-    "/**/*.test.ts",
-    "/**/*.sql",
     "/prisma/*",
-    "/**/*.graphql",
-    "/**/generated/*",
-    "/**/graphql/*"
   ],
   "verbose": true,
   "execMap": {
@@ -537,22 +661,83 @@ main();
 
 ![image-20210324110144559](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110144559.png)
 
-### C R U D
 
-接下来就到了正式使用环节，以下内容会指引你如何使用Prisma来对数据库进行CRUD操作，很有可能你会一边学一边感觉自己之前对ORM的认识都被颠覆了：CRUD还能这么玩？
 
-> 以下代码均在函数main中
+## Prisma单表初体验
+
+接下来就到了正式使用环节，上面的例子可能，以下内容会指引你如何使用Prisma来对数据库进行CRUD操作，很有可能你会一边学一边感觉自己之前对ORM的认识都被颠覆了：CRUD还能这么玩？
+
+> 本部分的代码见 [single-model](https://github.com/linbudu599/Prisma-Article-Example/tree/main/src/single-model) 
 
 - 创建
 
   ```typescript
-   const createTodo = await prisma.todo.create({
+   async function createTodo(title: string, content?: string) {
+    const res = await prisma.todo.create({
       data: {
-        title: "Prisma",
-        content: "Learn Prisma CRUD",
+        title,
+        content: content ?? null,
       },
     });
-    console.log("createTodo: ", createTodo);
+    return res;
+  }
   ```
+  
 
-  ![image-20210324110955713](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210324110955713.png)
+
+
+
+
+## Prisma多表、多数据库实战
+
+### Prisma 多表
+
+
+
+#### Prisma 多表级联
+
+
+
+### Prisma 多数据库
+
+#### 多个Prisma Client
+
+
+
+#### Prisma与其他ORM协作
+
+
+
+## Prisma + GraphQL
+
+### 项目搭建
+
+
+
+#### ObjectType
+
+
+
+#### Resolver
+
+
+
+#### Query/Mutation
+
+
+
+### DataLoader
+
+
+
+## 尾声：Prisma展望
+
+### Prisma 是一个ORM吗？
+
+
+
+### 工作原理
+
+
+
+### 一体化框架
