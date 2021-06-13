@@ -1,10 +1,12 @@
 ---
-category: Learning
+category: Tutorial
 tags:
   - Node
+  - GraphQL
+  - Prisma
 
-date: 2021-3-20
-title: Prisma，下一代ORM，不仅仅是ORM
+date: 2021-6-13
+title: Prisma，下一代ORM，不仅仅是ORM（上篇）
 ---
 
 ## 前言
