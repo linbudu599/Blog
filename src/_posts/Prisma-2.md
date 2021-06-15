@@ -1,4 +1,13 @@
-# Prisma：下一代ORM，不仅仅是ORM
+---
+category: Tutorial
+tags:
+  - Node
+  - GraphQL
+  - Prisma
+
+date: 2021-6-15
+title: Prisma，下一代ORM，不仅仅是ORM（下篇）
+---
 
 在上一篇文章中，我们从NodeJS社区的传统ORM讲起，介绍了它们的特征以及传统ORM的Active Record、Data Mapper模式，再到Prisma的环境配置、基本使用以及单表实践。在这篇文章中，我们将介绍Prisma的多表、多表级联、多数据库实战，以及Prisma与GraphQL的协作，在最后，我们还会简单的收尾来展开聊一聊Prisma，帮助你建立大致的印象：Prisma的优势在哪里？什么时候该用Prisma？
 
@@ -261,22 +270,7 @@ const oneToOneUpdate = await prisma.user.update({
 在这个例子中，我们使用Key-Value的形式，一个client存储key，另一个存储value：
 
 ```prisma
-model Key {
-  kid Int    @id @default(autoincrement())
-  key String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Value {
-  vid   Int    @id @default(autoincrement())
-  key   String
-  value String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+model Key {  kid Int    @id @default(autoincrement())  key String  createdAt DateTime @default(now())  updatedAt DateTime @updatedAt}model Value {  vid   Int    @id @default(autoincrement())  key   String  value String  createdAt DateTime @default(now())  updatedAt DateTime @updatedAt}
 ```
 
 > 以上的model定义是用两个schema文件储存的
@@ -286,35 +280,13 @@ model Value {
 实际使用也和单个Client没差别：
 
 ```typescript
-import { PrismaClient as PrismaKeyClient, Key } from "./prisma-key/client";
-import { PrismaClient as PrismaValueClient } from "./prisma-value/client";
-
-const keyClient = new PrismaKeyClient();
-const valueClient = new PrismaValueClient();
+import { PrismaClient as PrismaKeyClient, Key } from "./prisma-key/client";import { PrismaClient as PrismaValueClient } from "./prisma-value/client";const keyClient = new PrismaKeyClient();const valueClient = new PrismaValueClient();
 ```
 
 首先创建key（基于uuid），然后基于key创建value：
 
 ```typescript
-const key1 = await keyClient.key.create({
-    data: {
-      key: uuidv4(),
-    },
-    select: {
-      key: true,
-    },
-  });
-
-const value1 = await valueClient.value.create({
-    data: {
-      key: key1.key,
-      value: "林不渡",
-    },
-    select: {
-      key: true,
-      value: true,
-    },
-  });
+const key1 = await keyClient.key.create({    data: {      key: uuidv4(),    },    select: {      key: true,    },  });const value1 = await valueClient.value.create({    data: {      key: key1.key,      value: "林不渡",    },    select: {      key: true,      value: true,    },  });
 ```
 
 > 真的就和单个client没区别，是吧...
@@ -334,57 +306,7 @@ const value1 = await valueClient.value.create({
 - 查询所有Prisma的key，用于查询所有TypeORM的value
 
 ```typescript
-// 创建TypeORM连接
-const connection = await createConnection({
-    type: "sqlite",
-    database: IS_PROD
-      ? "./dist/src/with-typeorm/typeorm-value.sqlite"
-      : "./src/with-typeorm/typeorm-value.sqlite",
-    entities: [ValueEntity],
-    synchronize: true,
-    dropSchema: true,
-  });
-
-  // 使用Prisma存储key
-  const key1 = await prisma.prismaKey.create({
-    data: {
-      key: uuidv4(),
-    },
-    select: {
-      key: true,
-    },
-  });
-	
-	// 使用Prisma的key创建TypeORM的value
-  const insertValues = await ValueEntity.createQueryBuilder()
-    .insert()
-    .into(ValueEntity)
-    .values([
-      {
-        key: key1.key,
-        value: "林不渡",
-      }
-    ])
-    .execute();
-
-  const keys = await prisma.prismaKey.findMany();
-
-	// 查询得到所有的key，用于遍历查询value
-  for (const keyItem of keys) {
-    const key = keyItem.key;
-
-    console.log(`Search By: ${key}`);
-
-    const value = await ValueEntity.createQueryBuilder("value")
-      .where("value.key = :key")
-      .setParameters({
-        key,
-      })
-      .getOne();
-
-    console.log("Search Result: ", value);
-    console.log("===");
-  }
+// 创建TypeORM连接const connection = await createConnection({    type: "sqlite",    database: IS_PROD      ? "./dist/src/with-typeorm/typeorm-value.sqlite"      : "./src/with-typeorm/typeorm-value.sqlite",    entities: [ValueEntity],    synchronize: true,    dropSchema: true,  });  // 使用Prisma存储key  const key1 = await prisma.prismaKey.create({    data: {      key: uuidv4(),    },    select: {      key: true,    },  });		// 使用Prisma的key创建TypeORM的value  const insertValues = await ValueEntity.createQueryBuilder()    .insert()    .into(ValueEntity)    .values([      {        key: key1.key,        value: "林不渡",      }    ])    .execute();  const keys = await prisma.prismaKey.findMany();	// 查询得到所有的key，用于遍历查询value  for (const keyItem of keys) {    const key = keyItem.key;    console.log(`Search By: ${key}`);    const value = await ValueEntity.createQueryBuilder("value")      .where("value.key = :key")      .setParameters({        key,      })      .getOne();    console.log("Search Result: ", value);    console.log("===");  }
 ```
 
 
@@ -414,80 +336,7 @@ Prisma和GraphQL有个共同点，那就是它们都是SDL First的，Prisma Sch
 在这里我们直接看重要代码即可：
 
 ```typescript
-// server.ts
-const server = new ApolloServer({
-  schema,
-  context: { prisma },
-});
-
-// user.resolver.ts
-@Resolver(TodoItem)
-export default class TodoResolver {
-  constructor() {}
-
-  @Query((returns) => [TodoItem!]!)
-  async QueryAllTodos(@Ctx() ctx: IContext): Promise<TodoItem[]> {
-    return await ctx.prisma.todo.findMany({ include: { creator: true } });
-  }
-
-  @Query((returns) => TodoItem, { nullable: true })
-  async QueryTodoById(
-    @Arg("id", (type) => Int) id: number,
-    @Ctx() ctx: IContext
-  ): Promise<TodoItem | null> {
-    return await ctx.prisma.todo.findUnique({
-      where: {
-        id,
-      },
-      include: { creator: true },
-    });
-  }
-
-  @Mutation((returns) => TodoItem, { nullable: true })
-  async MutateTodoStatus(
-    @Arg("id", (type) => Int) id: number,
-    @Arg("status") status: boolean,
-    @Ctx() ctx: IContext
-  ): Promise<TodoItem | null> {
-    try {
-      return await ctx.prisma.todo.update({
-        where: {
-          id,
-        },
-        data: {
-          finished: status,
-        },
-        include: { creator: true },
-      });
-    } catch (error) {
-      return null;
-    }
-  }
-
-  @Mutation((returns) => TodoItem, { nullable: true })
-  async CreateTodo(
-    @Arg("createParams", (type) => CreateTodoInput) params: CreateTodoInput,
-    @Ctx() ctx: IContext
-  ): Promise<TodoItem | null> {
-    try {
-      return await ctx.prisma.todo.create({
-        data: {
-          title: params.title,
-          content: params?.content ?? null,
-          type: params?.type ?? ItemType.FEATURE,
-          creator: {
-            connect: {
-              id: params.userId,
-            },
-          },
-        },
-        include: { creator: true },
-      });
-    } catch (error) {
-      return null;
-    }
-  } 
-}
+// server.tsconst server = new ApolloServer({  schema,  context: { prisma },});// user.resolver.ts@Resolver(TodoItem)export default class TodoResolver {  constructor() {}  @Query((returns) => [TodoItem!]!)  async QueryAllTodos(@Ctx() ctx: IContext): Promise<TodoItem[]> {    return await ctx.prisma.todo.findMany({ include: { creator: true } });  }  @Query((returns) => TodoItem, { nullable: true })  async QueryTodoById(    @Arg("id", (type) => Int) id: number,    @Ctx() ctx: IContext  ): Promise<TodoItem | null> {    return await ctx.prisma.todo.findUnique({      where: {        id,      },      include: { creator: true },    });  }  @Mutation((returns) => TodoItem, { nullable: true })  async MutateTodoStatus(    @Arg("id", (type) => Int) id: number,    @Arg("status") status: boolean,    @Ctx() ctx: IContext  ): Promise<TodoItem | null> {    try {      return await ctx.prisma.todo.update({        where: {          id,        },        data: {          finished: status,        },        include: { creator: true },      });    } catch (error) {      return null;    }  }  @Mutation((returns) => TodoItem, { nullable: true })  async CreateTodo(    @Arg("createParams", (type) => CreateTodoInput) params: CreateTodoInput,    @Ctx() ctx: IContext  ): Promise<TodoItem | null> {    try {      return await ctx.prisma.todo.create({        data: {          title: params.title,          content: params?.content ?? null,          type: params?.type ?? ItemType.FEATURE,          creator: {            connect: {              id: params.userId,            },          },        },        include: { creator: true },      });    } catch (error) {      return null;    }  } }
 ```
 
 很明显和上面例子中的唯一差异就是这里推荐把prisma挂载到context上然后再调用方法，而不是为每个Resolver导入一次Prisma Client。而在Midway与Nest这一类基于IoC机制的Node框架中，推荐的使用方法是将Prisma Client注册到容器中，然后注入到Service层中。
@@ -521,7 +370,7 @@ export default class TodoResolver {
 
 - Prisma和GraphQL Generation
 
-   上面说到，由于Prisma和GraphQL都是Schema First，因此二者往往能够产生奇妙的化学反应。最容易想到的就是二者Schema的互相转化，但目前社区似乎没有类似的方案，原因无他，如果从Prisma Schema生成原生GraphQL Schema，并没有太多意义，因为现在其实很少会书写原生的Schema了。其次，如果要从Prisma得到GraphQL的类型定义，也没有必要直接转换到原生，完全可以转换到高阶表示，如Nexus与TypeGraphQL，所以目前社区有的也是 [`nexus-plugin-prisma`](https://nexusjs.org/docs/plugins/prisma/overview) 和 [`typegraphql-prisma`](https://github.com/michallytek/typegraphql-prisma#readme) 这两个方案，前者生成Nexus Type Builders，后者生成TypeGraphQL Class以及CRUD Resolvers。
+  上面说到，由于Prisma和GraphQL都是Schema First，因此二者往往能够产生奇妙的化学反应。最容易想到的就是二者Schema的互相转化，但目前社区似乎没有类似的方案，原因无他，如果从Prisma Schema生成原生GraphQL Schema，并没有太多意义，因为现在其实很少会书写原生的Schema了。其次，如果要从Prisma得到GraphQL的类型定义，也没有必要直接转换到原生，完全可以转换到高阶表示，如Nexus与TypeGraphQL，所以目前社区有的也是 [`nexus-plugin-prisma`](https://nexusjs.org/docs/plugins/prisma/overview) 和 [`typegraphql-prisma`](https://github.com/michallytek/typegraphql-prisma#readme) 这两个方案，前者生成Nexus Type Builders，后者生成TypeGraphQL Class以及CRUD Resolvers。
 
 
 
