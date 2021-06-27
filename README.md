@@ -7,5 +7,4 @@
 
 Visit in [https://linbudu.top/](https://linbudu.top/).
 
-- [BACK_UP_VERCEL](https://linbudu-blog.vercel.app/)
-- [BACK_UP_NETLIFY](https://linbudu-blog.netlify.app/)
+- [无梯地址](https://lignbudu-blog.netlify.app/)
