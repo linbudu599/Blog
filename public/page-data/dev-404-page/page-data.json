@@ -1,5 +1,0 @@
-{
-    "componentChunkName": "component---cache-dev-404-page-js",
-    "path": "/dev-404-page/",
-    "result": {"data":{"allSiteFunction":{"nodes":[]},"allSitePage":{"nodes":[{"path":"/"},{"path":"/blog"},{"path":"/tags"},{"path":"/wip"},{"path":"/ts-type-programming"},{"path":"/use-ref"},{"path":"/tc39-proposals"},{"path":"/graphql-directives"},{"path":"/fe-tools-2021"},{"path":"/prisma-02"},{"path":"/prisma-01"},{"path":"/graphql-tech-list"},{"path":"/ngrx"},{"path":"/rxjs-learn"},{"path":"/midway-type-graphql-usage"},{"path":"/next-apollo"},{"path":"/2020-summary"},{"path":"/apollo-server-vercel"},{"path":"/express-graphql"},{"path":"/flutter-state-management-02"},{"path":"/flutter-state-management-01"},{"path":"/fe-basics-2020"},{"path":"/babel-class"},{"path":"/user-tracing-learn"},{"path":"/koa-source"},{"path":"/useSelector"},{"path":"/about"},{"path":"/404.html"},{"path":"/404/"}]}},"pageContext":{}},
-    "staticQueryHashes": ["2744905544","3090400250"]}
