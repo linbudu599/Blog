@@ -1,0 +1,280 @@
+---
+title: "【outdated】Flutter状态管理初接触(二)：InheritedWidget与React中的context"
+date: 2020-09-23
+slug: "/flutter-state-management-02"
+---
+
+## 前言
+
+[Flutter 状态管理初接触] 的 [上一篇 ](https://linbudu.top/posts/2020/09/23/%E5%9F%BA%E4%BA%8Eprovider%E7%9A%84flutter%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86.html) 中我们介绍了基于`provider`的状态管理, 也说到它的底层是基于`InheritedWidget`的. 我在上手尝试过使用后, 个人感觉很像 React 中的 context, 因此觉得在讲解`InheritedWidget`的过程中, 可以多以 React context 的使用来作为示例.
+
+> 还看了下闲鱼技术部的 fish-redux, 感觉更熟悉了... action / reducer / store / effect 的概念简直梦回 redux/dva, 果然状态管理是殊途同归的?
+
+我们先通过回顾下[React Context API](https://zh-hans.reactjs.org/docs/context.html):
+
+```tsx
+const MyContext = React.createContext(defaultValue);
+const { Provider, Consumer } = MyContext;
+
+<Provider value={SHARED_CONTEXT}></Provider>
+<Consumer>{/* 跨层级消费共享上下文 */}</Consumer>
+```
+
+使用`Provider`提供状态后, 你就可以跨越任意层级的组件访问消费该状态而无需一级级的传递回调函数与属性了, 说来有趣, 我个人在初学 react 阶段, 看到 context 时简直惊为天人...
+
+`InheritedWidget`的使用同样是类似的的, 将状态提升到顶层(我觉得这是比较好的写法, 不要只将其提升到有消费需求的 widget 最近公共父节点这种), 而后内部子 widget 就可以进行使用.
+
+仍然是以计数器为例子, 我们直接来从代码领略其作用(因为它的确属于看了就会的 233):
+
+```dart
+class Counter {
+  final int count;
+  const Counter(this.count);
+}
+
+class SharedContext extends InheritedWidget {
+  final Counter counter;
+
+  final void Function() increment;
+  final void Function() decrement;
+
+  SharedContext(
+      {Key key,
+      @required this.counter,
+      @required this.increment,
+      @required this.decrement,
+      @required Widget child})
+      : super(key: key, child: child);
+
+}
+```
+
+`SharedContext`即是我们要进行共享的上下文, 而其内部的"状态"包括`counter`与两个对 counter 修改的方法. 在构造函数中我们要求传入`counter` & `increment` & `decrement` , 是为了在`InheritedWidget`(可以理解为`Provider`)内部去实例化实际上要共享的状态, 这么做的好处是你可以将`SharedContext`视作一个抽象类一般的存在, 实际使用可以基于其共享多种状态(比如 widget 需要的 counter 有的从 0 开始, 有的从 100 开始).
+
+我们还需要为`SharedContext`提供一个获取上下文的静态方法, 后代有消费需求的 widget 需要先以`SharedContext.xxx`的形式获取到共享上下文, 才能进行消费:
+
+```dart
+static SharedContext of(BuildContext context) {
+    // 该方法用于找到最近的上下文
+    return context.dependOnInheritedWidgetOfExactType<SharedContext>();
+  }
+```
+
+> 值得一提的是, `context.inheritFromWidgetOfExactType(targetType)`这一方法已经被废弃, 请使用`dependOnInheritedWidgetOfExactType<targetType>`方法
+
+`dependOnInheritedWidgetOfExactType<SharedContext>`能够找到并返回**最近的指定类型的共享上下文**.
+
+接着, 我们可以来创建`Provider`功能的 widget 了, 它需要是一个`StatefulWidget`:
+
+```dart
+import "package:flutter/material.dart";
+
+void main() {
+  runApp(InheritedWidgetContainer());
+}
+
+class InheritedWidgetContainer extends StatefulWidget {
+  InheritedWidgetContainer({Key key}) : super(key: key);
+
+  @override
+  _InheritedWidgetContainerState createState() =>
+      _InheritedWidgetContainerState();
+}
+
+class _InheritedWidgetContainerState extends State<InheritedWidgetContainer> {
+  Counter counter;
+
+  void _initialization() {
+    counter = Counter(0);
+  }
+
+  @override
+  void initState() {
+    _initialization();
+    super.initState();
+  }
+
+  void _increment() {
+    setState(() {
+      counter = Counter(counter.count + 1);
+    });
+  }
+
+  void _decrement() {
+    setState(() {
+      counter = Counter(counter.count - 1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SharedContext(
+      counter: counter,
+      increment: _increment,
+      decrement: _decrement,
+      child: MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            title: Text("基于 InheritedWidget 的 Flutter状态管理"),
+          ),
+          body: Center(
+              child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                // ...
+              ],
+            ),
+          )),
+        ),
+      ),
+    );
+  }
+}
+```
+
+在`InheritedWidgetContainer`中, 我们提供了实例化的`counter`以及修改方法的实现, 并传入到`SharedContext`中(注意其形式并不是 redux 中的`value={store}`这样.) 在不同的 Container 中, 我们可以实例化不同的状态.
+
+接着, 我们先创建一个 widget 用于读取值:
+
+```dart
+class ValueWidget extends StatefulWidget {
+  ValueWidget({Key key}) : super(key: key);
+
+  @override
+  _ValueWidgetState createState() => _ValueWidgetState();
+}
+
+class _ValueWidgetState extends State<ValueWidget> {
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    print("Dependencies change");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inheritedCtx = SharedContext.of(context);
+    final counter = inheritedCtx.counter;
+
+    print("Count Value in ValueWidget: ${counter.count}");
+
+    return Padding(
+      padding: EdgeInsets.all(15),
+      child: Text(
+        "count: ${counter.count}",
+        style: Theme.of(context).textTheme.headline3,
+      ),
+    );
+  }
+}
+```
+
+需要注意的是这里:
+
+```dart
+    final inheritedCtx = SharedContext.of(context);
+    final counter = inheritedCtx.counter;
+```
+
+以及`didChangeDeps`方法, 了解过 Flutter 生命周期的话你应该知道它会在依赖变化时调用, 用于执行一些开销比较大的操作如网络请求这种副作用, 但依赖是什么呢? 实际上就是其在 widget 树的上方所拥有的`InheritedWidget`父级内部状态是否变化, 我们在`SharedContext`中新增一个方法:
+
+```dart
+  @override
+  bool updateShouldNotify(SharedContext oldContext) {
+    return true;
+  }
+```
+
+这个方法接收变化前的状态, 并且判断是否触发子组件的`didChangeDeps`事件(根据返回 true/false). 父或祖先 widget 中的`InheritedWidget`改变(`updateShouldNotify`返回`true`)时会被调用. 如果 build 中没有依赖 InheritedWidget，则此回调不会被调用.
+
+如果你在这个控件内没有使用到`InheritedWidget`传递的值, 那么这个方法就不会在状态变化时被调用.
+
+接着, 我们把`+` & `-`按钮也抽离成组件, 来展示其"共享"能力:
+
+```dart
+class IncreWidget extends StatelessWidget {
+  const IncreWidget({Key key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final inheritedCtx = SharedContext.of(context);
+    final counter = inheritedCtx.counter;
+
+    print("Count Value in IncreWidget: ${counter.count}");
+
+    return Padding(
+        padding: EdgeInsets.only(bottom: 15),
+        child: RaisedButton(
+          color: Colors.white,
+          onPressed: inheritedCtx.increment,
+          child: Text(
+            "+",
+            style: TextStyle(fontSize: 32, color: Colors.green),
+          ),
+        ));
+  }
+}
+
+class DecreWidget extends StatelessWidget {
+  const DecreWidget({Key key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final inheritedCtx = SharedContext.of(context);
+    final counter = inheritedCtx.counter;
+
+    print("Count Value in DecreWidget: ${counter.count}");
+
+    return Padding(
+        padding: EdgeInsets.only(top: 15),
+        child: RaisedButton(
+          color: Colors.white,
+          onPressed: inheritedCtx.decrement,
+          child: Text(
+            "-",
+            style: TextStyle(fontSize: 32, color: Colors.redAccent),
+          ),
+        ));
+  }
+}
+```
+
+添加到`Container`中:
+
+```dart
+ @override
+  Widget build(BuildContext context) {
+    return SharedContext(
+      counter: counter,
+      increment: _increment,
+      decrement: _decrement,
+      child: MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            title: Text("基于 InheritedWidget 的 Flutter状态管理"),
+          ),
+          body: Center(
+              child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                const IncreWidget(),
+                ValueWidget(),
+                const DecreWidget(),
+              ],
+            ),
+          )),
+        ),
+      ),
+    );
+  }
+```
+
+> 完整代码见 [GitHub](https://github.com/linbudu599/Flutter-Praticing/blob/master/review/state/inheritedwidget.dart)
+
+其他注意点:
+
+- SharedContext 会在内部值更新时重新构建, 并且是懒初始化的(我猜`provider`的懒初始化也是因为这个)
+- SharedContext 会跟随指定类型的父级`InheritedWidget`, 来实现局部`widget`更新

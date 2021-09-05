@@ -1,0 +1,579 @@
+---
+title: "【outdated】在MidwayJS中使用 TypeGraphQL + TypeORM"
+date: 2021-01-22
+slug: "/midway-type-graphql-usage"
+---
+
+## 前言
+
+其实去年六七月左右我就有尝试过在 MidwayJS 中使用 GraphQL 及相关技术栈了了, 但是当时真的太菜了, 完全不清楚依赖注入啊容器啊相关的概念, 于是半途而废放弃了, 改成用原生的 Apollo-Server 了.
+
+这一次是在看到了淘系技术黑皮书中 JSCON 老师(不知道花名...)的文章中给出的结合示例我才有了思路, 但是由于文中的例子可能是 Midway 1 的写法, 在 Midway 2 中部分写法已经不能使用了, 因此这里我又扩展了下, 得到了 EggJS 中间件与 Koa 中间件的两种写法, 这里做一个记录(因为真的还挺有成就感).
+
+阅读本文前需要你了解以下技术栈:
+
+- GraphQL
+- Apollo-Server
+- TypeGraphQL
+- MidwayJS & EggJS & KoaJS
+- TypeORM
+
+## Koa 中间件
+
+> 由于没有仔细看文档中的示例代码, 导致我额外浪费了一个小时, 淦.
+
+首先在 `src/middleware` 下新建`graphql.ts`,
+
+我最开始的写法是这样的:
+
+```ts
+import * as path from "path";
+import { Provide, Config, App } from "@midwayjs/decorator";
+import {
+  IWebMiddleware,
+  IMidwayKoaContext,
+  IMidwayKoaNext,
+  IMidwayKoaApplication,
+} from "@midwayjs/koa";
+
+import { ApolloServer, ServerRegistration } from "apollo-server-koa";
+import { buildSchemaSync } from "type-graphql";
+
+type ApolloMwConfig = { [key: string]: any } & ServerRegistration;
+
+@Provide("GraphQLMiddleware")
+export class GraphqlMiddleware implements IWebMiddleware {
+  @Config("apollo")
+  config: ApolloMwConfig;
+
+  resolve() {
+    console.log("Apollo Config", this.config);
+    return async (ctx: IMidwayKoaContext, next: IMidwayKoaNext) => {
+      const server = new ApolloServer({
+        schema: buildSchemaSync({
+          resolvers: [path.resolve("./src", "resolver/*")],
+          container: ctx.requestContext,
+        }),
+      });
+      console.log("Apollo-GraphQL Invoke");
+      await next();
+      return server.getMiddleware(this.config);
+    };
+  }
+}
+```
+
+先不说是哪里错了, 在`src/configuration.ts`下注册该全局中间件:
+
+```ts
+import { Configuration, App } from "@midwayjs/decorator";
+import { ILifeCycle } from "@midwayjs/core";
+import { IMidwayKoaApplication } from "@midwayjs/koa";
+
+@Configuration({
+  imports: ["./lib/orm"],
+  importConfigs: ["./config"],
+})
+export class ContainerConfiguration implements ILifeCycle {
+  @App()
+  app: IMidwayKoaApplication;
+
+  async onReady() {
+    console.log("onReady Hook");
+    this.app.use(await this.app.generateMiddleware("GraphQLMiddleware"));
+  }
+}
+```
+
+这样使用的结果是 `/graphql` 路径直接 404 了, 当时觉得没啥问题, 执行链路是这样的:
+
+- 执行 onReady, 执行`this.app.generateMiddleware('GraphQLMiddleware')`
+- 实例化`GraphqlMiddleware`, 调用 resolve 方法, resolve 内部的异步方法返回`Apollo-Server`使用`getMiddleware`方法生成的中间件, 然后整体就相当于`this.app.use(ApolloMiddleware)`, 没毛病啊?
+
+直到这里我还是没发现问题, 当我尝试在 resolve 方法中直接`ctx.app.use(server.getMiddleware(this.config))`的时候又可以了! 那么问题就很明朗了, 中间件没注册上. 再回去看文档中"第三方中间件"一节, 它的示例代码是这样的:
+
+```ts
+import * as koaStatic from "koa-static";
+
+@Provide()
+export class ReportMiddleware implements IWebMiddleware {
+  resolve() {
+    return koaStatic(root, opts);
+  }
+}
+```
+
+好家伙我直接好家伙, 果然嵌套害死人. 修改 GraphQL 中间件的代码:
+
+```ts
+import * as path from "path";
+import { Provide, Config, App } from "@midwayjs/decorator";
+import { IWebMiddleware, IMidwayKoaApplication } from "@midwayjs/koa";
+
+import { ApolloServer, ServerRegistration } from "apollo-server-koa";
+import { buildSchemaSync } from "type-graphql";
+
+// some extra config
+type ApolloMwConfig = { [key: string]: any } & ServerRegistration;
+
+@Provide("GraphQLMiddleware")
+export class GraphqlMiddleware implements IWebMiddleware {
+  @Config("apollo")
+  config: ApolloMwConfig;
+
+  @App()
+  app: IMidwayKoaApplication;
+
+  resolve() {
+    console.log("Apollo Config", this.config);
+    const server = new ApolloServer({
+      schema: buildSchemaSync({
+        resolvers: [path.resolve("./src", "resolver/*")],
+        container: this.app.getApplicationContext(),
+      }),
+    });
+    console.log("Apollo-GraphQL Invoke");
+
+    return server.getMiddleware(this.config);
+  }
+}
+```
+
+淦, 然后果然就可以了, 这里说明几个地方:
+
+- TypeGraphQL 本身不会提供容器的支持, 因此如果你想要以依赖注入的方式使用它提供的各个装饰器就要自己提供容器, 框架层面比如这里的 MidwayJS 和 NestJS(作者还手撸了个 TypeGraphQL-NestJS 的集成包), 因此这里在生成 schema 时需要传入 Midway 的运行时容器.
+- 原本我们可以通过`ctx.requestContext`拿到容器, 现在拿不到 ctx 参数了, 因此需要注入 app 实例然后才能获取到容器.`getApplicationContext()`方法是所有上层框架 app 都会实现的接口.
+
+然后编写个简单的解析器就能打开`/graphql`了:
+
+```ts
+import { Provide } from "@midwayjs/decorator";
+import { Resolver, Query } from "type-graphql";
+
+import User from "../graphql/user";
+
+@Provide()
+@Resolver((of) => User)
+export default class UserResolver {
+  constructor() {}
+
+  @Query((returns) => User)
+  async GetRandomUser(): Promise<User> {
+    return {
+      id: Math.floor(Math.random() * 100),
+      name: "林不渡",
+    };
+  }
+}
+```
+
+(看到`GraphQL Playground`我真的眼泪都要下来了)
+
+![image-20210122114614810](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210122114614810.png)
+
+暂时不太清楚会不会遇到更多诡异的问题...
+
+## Egg 中间件
+
+Egg 中间件需要遵守 EggJS 的相关规范, 有兴趣的同学可以自己去阅读 EggJS 的文档.
+
+在`src/app/middleware`下新建`eggraphql.ts`(这名字还挺好玩吧), 这里用的是函数式写法:
+
+```ts
+import * as path from "path";
+import { IMidwayWebNext } from "@midwayjs/web";
+
+import { Context } from "egg";
+
+import { ApolloServer, ServerRegistration } from "apollo-server-koa";
+import { buildSchemaSync } from "type-graphql";
+
+export default (options: ServerRegistration) => {
+  return async function graphql(ctx: Context, next: IMidwayWebNext) {
+    await next();
+    const server = new ApolloServer({
+      schema: buildSchemaSync({
+        resolvers: [path.resolve(ctx.app.baseDir, "resolver/*.ts")],
+        container: ctx.app.applicationContext,
+      }),
+    });
+    ctx.app.use(server.getMiddleware(options));
+  };
+};
+```
+
+在`src/config/config.default.ts`中配置这个中间件, 并且传入配置:
+
+```ts
+import { ServerRegistration } from "apollo-server-koa";
+import { EggAppConfig, EggAppInfo, PowerPartial } from "egg";
+import { ConnectionOptions } from "../lib/orm";
+
+export type DefaultConfig = PowerPartial<EggAppConfig>;
+
+export default (appInfo: EggAppInfo) => {
+  const config = {} as DefaultConfig;
+
+  // eggjs版本的全局中间件还是要在这里开启
+  config.middleware = ["eggraphql"];
+
+  config["eggraphql"] = {
+    path: "/eggraphql",
+  };
+
+  config.security = {
+    csrf: false,
+  };
+
+  return config;
+};
+```
+
+访问`/eggraphql`:
+
+![image-20210122115339132](https://budu-oss-store.oss-cn-shenzhen.aliyuncs.com/image-20210122115339132.png)
+
+## TypeORM
+
+MidwayJS 提供了`@midwayjs/orm`这个包来为 TypeORM 提供集成使用, 也就是受这个影响我觉得是否也可以整个`@midwayjs/type-graphql`(之前还在实习的时候我有看到过内部一位大佬封装了个 faas 版本的这玩意).
+
+源码也很简单, 大致来看一下:
+
+- config/ 配置
+- configuration.ts 可以理解为在这里**初始化数据库连接** & **注入相关实例如 Repository 等到容器**
+- index.ts `@EntityModel` `@InjectEntityModel`方法实现
+- hook.ts TypeORM 连接的生命周期钩子, 包括`before/after Create/Close`
+- repository.ts `getRepository` API
+
+先从 index.ts 开始, 由于比较简单就不多做讲解了, 直接看注释
+
+> 有部分我自己新增的代码, 详见官方仓库 midway-components
+
+```ts
+import {
+  EntityOptions,
+  getMetadataArgsStorage,
+  ObjectType,
+  EntitySchema,
+  Repository,
+  TreeRepository,
+  MongoRepository,
+  Connection,
+  getRepository,
+} from 'typeorm';
+import { ViewEntityOptions } from 'typeorm/decorator/options/ViewEntityOptions';
+import { saveModule, attachClassMetadata } from '@midwayjs/core';
+
+// 容器中的token
+export const CONNECTION_KEY = 'orm:getConnection';
+export const MANAGER_KEY = 'orm:getManager';
+export const ENTITY_MODEL_KEY = 'entity_model_key';
+export const EVENT_SUBSCRIBER_KEY = 'event_subscriber_key';
+export const ORM_MODEL_KEY = '__orm_model_key__';
+
+export { ConnectionOptions } from 'typeorm';
+
+// @Entity的包装, 主要逻辑是将实体类注册到内部的模块关系映射中
+export function EntityModel(
+  nameOrOptions?: string | EntityOptions,
+  maybeOptions?: EntityOptions
+): ClassDecorator {
+  const options =
+    (typeof nameOrOptions === 'object'
+      ? (nameOrOptions as EntityOptions)
+      : maybeOptions) || {};
+  const name = typeof nameOrOptions === 'string' ? nameOrOptions : options.name;
+
+  return function (target) {
+    if (typeof target === 'function') {
+      saveModule(ENTITY_MODEL_KEY, target);
+    } else {
+      saveModule(ENTITY_MODEL_KEY, (target as object).constructor);
+    }
+
+    // 就是TypeORM的@Entity内部的逻辑
+    getMetadataArgsStorage().tables.push({
+      target: target,
+      name: name,
+      type: 'regular',
+      orderBy: options.orderBy ? options.orderBy : undefined,
+      engine: options.engine ? options.engine : undefined,
+      database: options.database ? options.database : undefined,
+      schema: options.schema ? options.schema : undefined,
+      synchronize: options.synchronize,
+      withoutRowid: options.withoutRowid,
+    });
+  };
+}
+
+// @EntityView 装饰器 略过
+export function EntityView(
+  nameOrOptions?: string | ViewEntityOptions,
+  maybeOptions?: ViewEntityOptions
+): ClassDecorator {
+  // ...
+}
+
+// 在类中使用@InjectEntityModel装饰器将Repository实例注入到属性
+export function InjectEntityModel(
+  modelKey?: any,
+  connectionName = 'default'
+): PropertyDecorator {
+  return (target, propertyKey) => {
+    // 将元数据添加到类上, 这里的类即使用了此装饰器的类
+    // 后续的registerDataHandler逻辑会使用此元数据来实例化Repository
+    attachClassMetadata(
+      ORM_MODEL_KEY,
+      {
+        key: {
+          modelKey,
+          connectionName,
+        },
+        propertyName: propertyKey,
+      },
+      target
+    );
+  };
+}
+
+// 注入连接
+export function InjectConnection(
+  connectionName = 'default'
+): PropertyDecorator {
+  return (target, propertyKey) => {
+    // ...
+}
+
+// 注入实体管理器
+export function InjectManager(connectionName = 'default'): PropertyDecorator {
+  return (target, propertyKey) => {
+    // ...
+}
+
+
+/**
+ * for hooks useEntityModel method
+ * @param clz
+ * @param instanceName
+ */
+export function useEntityModel<Entity>(
+  clz: ObjectType<Entity>,
+  connectionName?: string
+): Repository<Entity> {
+  return getRepository<Entity>(clz, connectionName);
+}
+
+export { OrmConfiguration as Configuration } from './configuration';
+```
+
+然后是 hook.ts 和 configuration.ts, 先来看看都包含了哪些 hook:
+
+```ts
+import { saveModule } from "@midwayjs/core";
+import { Connection, ConnectionOptions } from "typeorm";
+
+export const ORM_HOOK_KEY = "__orm_hook_for_configuration__";
+
+export interface OrmConnectionHook {
+  beforeCreate?(opts?: ConnectionOptions): Promise<ConnectionOptions>;
+  afterCreate?(
+    conn?: Connection,
+    opts?: ConnectionOptions
+  ): Promise<Connection>;
+  beforeClose?(conn?: Connection, connectionName?: string): Promise<Connection>;
+  afterClose?(conn?: Connection): Promise<Connection>;
+}
+
+export function OrmHook(): ClassDecorator {
+  return function (target) {
+    if (typeof target === "function") {
+      saveModule(ORM_HOOK_KEY, target);
+    } else {
+      saveModule(ORM_HOOK_KEY, (target as object).constructor);
+    }
+  };
+}
+```
+
+configuration.ts 中我们要做的事情主要有:
+
+- 获取并格式化 ormconfig, 创建连接(组)
+- 注册连接
+- ...没了
+
+```ts
+import { ILifeCycle, IMidwayContainer } from "@midwayjs/core";
+import { Configuration, listModule, Config } from "@midwayjs/decorator";
+import {
+  createConnection,
+  getConnection,
+  getRepository,
+  getManager,
+  ConnectionOptions,
+  Connection,
+} from "typeorm";
+import {
+  ENTITY_MODEL_KEY,
+  EVENT_SUBSCRIBER_KEY,
+  CONNECTION_KEY,
+  ORM_MODEL_KEY,
+  MANAGER_KEY,
+} from ".";
+import { ORM_HOOK_KEY, OrmConnectionHook } from "./hook";
+import { join } from "path";
+
+// 导入config.orm字段
+@Configuration({
+  importConfigs: [join(__dirname, "./config")],
+  namespace: "orm",
+})
+export class OrmConfiguration implements ILifeCycle {
+  @Config("orm")
+  private ormConfig: any;
+
+  private connectionNames: string[] = [];
+
+  async onReady(container: IMidwayContainer) {
+    // 注册后才能在类中注入Repository, Connection EntityManager同理
+    (container as any).registerDataHandler(
+      ORM_MODEL_KEY,
+      (key: { modelKey: any; connectionName: string }) => {
+        const repo = getRepository(key.modelKey, key.connectionName);
+        return repo;
+      }
+    );
+
+    // 在@EntityModel中调用了saveModule保存实体, 在这里就可以获取到了
+    const entities = listModule(ENTITY_MODEL_KEY);
+    const eventSubs = listModule(EVENT_SUBSCRIBER_KEY);
+
+    const opts = this.formatConfig();
+
+    for (const connectionOption of opts) {
+      connectionOption.entities = entities || [];
+      connectionOption.subscribers = eventSubs || [];
+      const name = connectionOption.name || "default";
+      this.connectionNames.push(name);
+      let isConnected = false;
+      // 尝试建立连接
+      try {
+        const conn = getConnection(name);
+        if (conn.isConnected) {
+          isConnected = true;
+        }
+      } catch {}
+      if (!isConnected) {
+        const rtOpt = await this.beforeCreate(container, connectionOption);
+        const con = await createConnection(rtOpt);
+        await this.afterCreate(container, rtOpt, con);
+      }
+    }
+
+    // 在容器中注册连接
+    container.registerObject(CONNECTION_KEY, (instanceName) => {
+      if (!instanceName) {
+        instanceName = "default";
+      }
+      return getConnection(instanceName);
+    });
+  }
+
+  async onStop(container: IMidwayContainer) {
+    await Promise.all(
+      Object.values(this.connectionNames).map(async (connectionName) => {
+        const conn = getConnection(connectionName);
+
+        await this.beforeClose(container, conn, connectionName);
+
+        if (conn.isConnected) {
+          await conn.close();
+        }
+
+        await this.afterClose(container, conn);
+      })
+    );
+
+    this.connectionNames.length = 0;
+  }
+
+  formatConfig(): any[] {
+    const originConfig = this.ormConfig;
+    if (originConfig?.type) {
+      originConfig.name = "default";
+      return [originConfig];
+    } else {
+      const newArr = [];
+
+      for (const [key, value] of Object.entries(originConfig)) {
+        (value as any).name = key;
+        newArr.push(value);
+      }
+
+      return newArr;
+    }
+  }
+
+  private async beforeCreate(
+    container: IMidwayContainer,
+    opts: ConnectionOptions
+  ): Promise<ConnectionOptions> {
+    let rt = opts;
+    const clzzs = listModule(ORM_HOOK_KEY);
+    for (const clzz of clzzs) {
+      const inst: OrmConnectionHook = await container.getAsync(clzz);
+      if (inst.beforeCreate && typeof inst.beforeCreate === "function") {
+        rt = await inst.beforeCreate(rt);
+      }
+    }
+    return rt;
+  }
+
+  private async afterCreate(
+    container: IMidwayContainer,
+    opts: ConnectionOptions,
+    con: Connection
+  ): Promise<Connection> {
+    let rtCon: Connection = con;
+    const clzzs = listModule(ORM_HOOK_KEY);
+    for (const clzz of clzzs) {
+      const inst: OrmConnectionHook = await container.getAsync(clzz);
+      if (inst.afterCreate && typeof inst.afterCreate === "function") {
+        rtCon = await inst.afterCreate(con, opts);
+      }
+    }
+    return rtCon;
+  }
+
+  private async beforeClose(
+    container: IMidwayContainer,
+    con: Connection,
+    connectionName: string
+  ) {
+    let rt = con;
+    const clzzs = listModule(ORM_HOOK_KEY);
+    for (const clzz of clzzs) {
+      const inst: OrmConnectionHook = await container.getAsync(clzz);
+      if (inst.beforeClose && typeof inst.beforeClose === "function") {
+        rt = await inst.beforeClose(rt, connectionName);
+      }
+    }
+    return rt;
+  }
+
+  private async afterClose(container: IMidwayContainer, con: Connection) {
+    let rt = con;
+    const clzzs = listModule(ORM_HOOK_KEY);
+    for (const clzz of clzzs) {
+      const inst: OrmConnectionHook = await container.getAsync(clzz);
+      if (inst.afterClose && typeof inst.afterClose === "function") {
+        rt = await inst.afterClose(rt);
+      }
+    }
+    return rt;
+  }
+}
+```
+
+大致逻辑即是如此.
+
+具体使用直接参考我给`@midwayjs/orm`提的这个[文档 PR](https://github.com/midwayjs/midway-component/pull/24)

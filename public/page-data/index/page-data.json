@@ -1,0 +1,5 @@
+{
+    "componentChunkName": "component---node-modules-lekoarts-gatsby-theme-minimal-blog-core-src-templates-homepage-query-tsx",
+    "path": "/",
+    "result": {"data":{"allPost":{"nodes":[{"slug":"/use-ref","title":"从一个需求出发，聊聊useRef三兄弟","date":"2021-08-29","excerpt":"前言 Vue、React、Angular这一类前端框架的出现使得我们不再需要去手动操作Dom了，回想曾经的JQuery时代，与DOM打交道是最为频繁也最为头疼的，比如我前端入门时期收获最多的书之一就是 JavaScript DOM编程艺术 。 现在我们和DOM…","timeToRead":1,"description":null,"tags":null},{"slug":"/ts-type-programming","title":"TypeScript的另一面：类型编程","date":"2021-08-29","excerpt":"前言 作为前端开发的趋势之一，TypeScript 正在为越来越多的开发者所喜爱，从大的方面来说，几乎九成的框架与工具库都以其写就（或者就是类似的类型方案，如 Flow）；而从小的方面来说，即使是写个配置文件（如 vite 的配置文件）或者小脚本（感谢 ts-node…","timeToRead":6,"description":null,"tags":null},{"slug":"/tc39-proposals","title":"聊一聊进行中的TC39提案（stage1/2/3）","date":"2021-08-29","excerpt":"前言 最近看到了一些很有趣的ES提案，如Record与Tuple数据类型，思路来自RxJS的Observable，借鉴自函数式编程的throw Expressions，带来更好错误处理的 Error Cause 等，可以认为一旦这些提案完全进入到ES新特性中，前端er…","timeToRead":2,"description":null,"tags":null}]}},"pageContext":{"formatString":"YYYY-MM-DD"}},
+    "staticQueryHashes": ["2744905544","3090400250","318001574"]}

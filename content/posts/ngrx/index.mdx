@@ -1,0 +1,254 @@
+---
+title: "【draft】NgRx 快速入门(WIP)"
+date: 2021-02-28
+slug: "/ngrx"
+---
+
+## 前言
+
+> 本文进度
+>
+> - [x] 完成 NgRx 基本的文档阅读
+> - [x] 将对应的代码整理到 Nx-Todo-App > NgRx-Practice 中
+> - [x] 比对 Redux 系列中的库
+> - [ ] 草稿
+> - [ ] 讲人话, 发文章, 西内!
+
+是的, 我又发现了一个很好玩的东西! Redux + Redux-Saga + Connected-React-Router + RxJS + Angular = NgRx!
+
+Flux 式的数据流, 同样是 action >>> reducer >>> Immutable State, 但又有很多差异, 这些差异主要集中在写法上, 比如内置了 createAction createSelector(功能非常强答) createEffect 等等这些 API, 类型提示非常舒服. 整体思路是和在 React 中使用 Redux 差不多的, 主要是把思路更换到 Angular + RxJS 会花费一点时间.
+
+这篇文章简单记录下入门过程中的学习:
+
+- 基础概念
+
+  - action
+
+    - [x] createAction: 有 Payload 则需要传入`props<T>()`
+
+  - reducer
+
+    - [x] initialState
+      - [x] plain
+      - [x] adapter
+    - [x] FEATURE_KEY
+    - [x] on(action, (state) => modifiedState)
+    - [x] \_reducer 与 reducer
+    - [x] Feature State 注册
+
+  - selectors
+
+    - [x] createSelector((state) => state.a, (a) => a.b)
+
+    - [x] with props
+
+    - [x] createFeatureSelector()
+
+    - [x] combination
+
+    - [x] 重置缓存
+
+    - [x] this.store.select() 与 this.store.pipe(selector())
+
+      > 直接调用 select 可以不为 Store 传入泛型
+
+    - [x] 对选取结果进一步的 pipe 处理
+
+  - [x] Meta-Reducers (Mw in Redux)
+
+  - [x] 注入式 Reducer
+
+  - [x] effects
+
+    - 类似于 dva/icestore 的使用方式, 监听到对应的 action >>> 触发 effect >>> 在 effect 完成后 dispatch 一个新的 action(一般负责携带返回的数据填充 store)
+
+  - 同一组 effect 放在一个类中, 多个 effect 由 xxx$ = this.actions$.pipe()的方式分别定义, 通常会注入 service layer 到类中
+
+    - 在监听到 action --- 派发新的 action 中间, 可以任意使用 RxJS 的操作符来进行各种方便的操作(实际上从 ofType 开始也都是放在一个 pipe 中进行的)
+    - 如果不使用 service, 也可以直接使用@nrwl/angular 提供的封装好的 fetch 方法, 里面内置了 run onSuccess onError 方法
+    - effect 类需要在 EffectsModule 中注册
+    - EffectsModule 同样也有 forRoot 和 forFeature 方法, 来约束 module 能进行的操作
+    - 如果在 pipe 中需要使用 store 中的数据, 可以使用` concatLatestFrom(action => this.store.select(fromBooks.getCollectionBookIds))`这种方式
+    - 如果这是一个不需要 dispatch(比如在 pipe 的最后使用 tap 判断下数据, 调用 window.alert 这种 API)的 effect, 可以在第二个参数传入 dispatch: false
+
+  - [x] RouterStore
+
+    之前的 react-router-redux, 现在的 connected-react-router
+
+    作用就是为了在路由切换周期内去自动的 dispatch action, 或者说监听路由的状态. 通常会使用来自路由状态的数据进行一些额外的操作
+
+    - setup: StoreModule.forRoot 中的 featureReducer 和 routerReducer(导出自'@ngrx/router-store'包), AppRoutingModule, StoreRouterConnectingModule, 均在全局 AppModule 中注册
+
+    - 使用 featureSelector + getSelectors, 获取来自于 routerReducer 专属的选择器
+
+      ```typescript
+      import { getSelectors, RouterReducerState } from "@ngrx/router-store";
+      import { createFeatureSelector } from "@ngrx/store";
+
+      export const selectRouter =
+        createFeatureSelector<RouterReducerState>("router");
+
+      export const {
+        selectCurrentRoute, // select the current route
+        selectFragment, // select the current route fragment
+        selectQueryParams, // select the current route query params
+        selectQueryParam, // factory function to select a query param
+        selectRouteParams, // select the current route params
+        selectRouteParam, // factory function to select a route param
+        selectRouteData, // select the current route data
+        selectUrl, // select the current url
+      } = getSelectors(selectRouter);
+      ```
+
+    - 使用路由选择器进一步封装:
+
+      ```typescript
+      import { createFeatureSelector, createSelector } from "@ngrx/store";
+      import { selectRouteParams } from "../router.selectors";
+      import { carAdapter, CarState } from "./car.reducer";
+
+      export const carsFeatureSelector =
+        createFeatureSelector<CarState>("cars");
+
+      const { selectEntities, selectAll } = carAdapter.getSelectors();
+
+      export const selectCarEntities = createSelector(
+        carsFeatureSelector,
+        selectEntities
+      );
+
+      export const selectCar = createSelector(
+        selectCarEntities,
+        selectRouteParams,
+        (cars, { carId }) => cars[carId]
+      );
+      ```
+
+          将selectRouteParams和selectCarEntities组合起来, 就能够基于store和路由状态进行选择
+
+  - [x] Entity
+
+    用于管理集合类型的实体状态适配器
+
+    - 减少用于创建管理 model 集合的模板代码, adapter 中会提供 getInitialState 和 getSelectors 方法
+
+  - 提供高性能 CRUD 操作来管理实体集合, addOne, addMany, updateOne, updateMany 等
+
+    ```typescript
+    // 实体的全局状态
+    // EntityState的泛型是集合中单个项的类型
+    export interface BookEntityState extends EntityState<Book> {
+      selectedBookId: string | null;
+      globalProp: boolean;
+    }
+
+    // 集合主键的获取
+    export const selectBookId = (book: Book): string => book.id;
+
+    // 集合的排序依据
+    export const sortByTitle = (bookA: Book, bookB: Book): number =>
+      bookA.volumeInfo.title.localeCompare(bookB.volumeInfo.title);
+
+    // 集合对应的适配器上提供了getInitialState getSelectors 以及集合的操作方法
+    export const booksAdapter: EntityAdapter<Book> = createEntityAdapter<Book>({
+      selectId: selectBookId,
+      sortComparer: sortByTitle,
+    });
+
+    // 使用适配器的方法修改集合
+    export const booksEntityReducer = createReducer(
+      initialEntityState,
+      on(addBookEntity, (state, { book }) => booksAdapter.addOne(book, state)),
+      on(addBooksEntity, (state, { books }) =>
+        booksAdapter.addMany(books, state)
+      ),
+      on(updateBookEntity, (state, { update }) =>
+        booksAdapter.updateOne(update, state)
+      ),
+      on(updateBooksEntity, (state, { updates }) =>
+        booksAdapter.updateMany(updates, state)
+      )
+    );
+
+    export const getSelectedBookId = (state: BookEntityState) =>
+      state.selectedBookId;
+
+    // 供selector使用 进一步简化选择器代码
+    export const {
+      selectIds: selectBookIds,
+      selectEntities: selectBookEntities,
+      selectAll: selectAllBooks,
+      selectTotal: selectTotalBooks,
+    } = booksAdapter.getSelectors();
+
+    // 首级选择器必须使用EntityState作为泛型
+    export const selectBooksStateEntity =
+      createFeatureSelector<fromBooks.BookEntityState>("books");
+
+    export const selectBookIds = createSelector(
+      selectBooksStateEntity,
+      // 相当于fromBooks.selectBookIds(BooksState)
+      fromBooks.selectBookIds
+    );
+
+    export const selectAllBook = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectAllBooks
+    );
+    export const selectUserTotal = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectTotalBooks
+    );
+
+    export const selectBookEntities = createSelector(
+      selectBooksStateEntity,
+      fromBooks.selectBookEntities
+    );
+
+    export const selectCurrentBookId = createSelector(
+      selectBooksStateEntity,
+      fromBooks.getSelectedBookId
+    );
+
+    export const selectCurrentBook = createSelector(
+      selectBooksStateEntity,
+      selectCurrentBookId,
+      (bookEntities, bookId) => bookEntities[bookId]
+    );
+    ```
+
+  - [x] ComponentStore
+
+    - 和`@ngrx/store`是独立的, 但一起使用也不错,component-store 中可以拿到全局 store 的数据.
+
+  - 使用方法更简单, component-store 内部就是 select/updater/effect 这几个方法.
+
+    - select 可以是防抖的, 通常会用一个附带的 effect 来搭配完成竞态等处理
+    - updater 分为 setState 和 patchState
+    - effect 可以直接传入一个内部各种 pipe 最后返回值的函数,也可以再加一个依赖项
+    - 使用场景:
+      - 本地的 UI 状态, 以组件自治的思路划分
+      - 让服务基于 ComponentStore 扩展, 并且把所有的相关逻辑都塞到服务里.
+        - 可以直接以整个服务作为 provider, 或者以 ComponentStore 作为 provider.
+
+  - models: 作为其他文件的类型定义
+
+- Nx
+
+  - `ng g @nrwl/angular:ngrx counter --module=apps/ngrx-practice/src/app/app.module.ts --root`
+  - `ng g @nrwl/angular:lib products`
+  - `ng g @nrwl/angular:ngrx products --module=libs/products/src/lib/products.module.ts --directory +state/products --defaults`
+  - --root: 设置 Store / Effects / Router-Store / DevTools 等
+  - --syntax:
+  - --facade:
+
+- Ng 注册
+
+  - StoreModule
+    - forRoot
+    - forFeature
+  - StoreRouterConnectingModule
+
+- EffectsModule
+
+  - StoreDevtoolsModule
