@@ -5,4 +5,6 @@
 [![GitHub issues](https://img.shields.io/github/issues/linbudu599/Blog)](https://github.com/linbudu599/Blog/issues)
 [![GitHub stars](https://img.shields.io/github/stars/linbudu599/Blog)](https://github.com/linbudu599/Blog/stargazers)
 
-**Blog site is under refactoring, read from [files](https://github.com/linbudu599/Blog/tree/master/src/_posts) directly.**
+- [Backup site on Netlify](https://linbudu-blog.netlify.app/)
+
+- Built on top of [gatsby-starter-minimal-blog](https://github.com/LekoArts/gatsby-starter-minimal-blog).
