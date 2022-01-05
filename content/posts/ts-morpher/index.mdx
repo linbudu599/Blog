@@ -1,0 +1,413 @@
+---
+title: "让 AST 操作像呼吸一样自然"
+date: 2021-11-04
+slug: "/ts-morpher"
+---
+
+一直以来，前端同学们对于编译原理都存在着复杂的看法，大部分人都觉得自己写业务也用不到这么高深的理论知识，况且编译原理晦涩难懂，并不能提升自己在前端领域内的专业知识。我不觉得这种想法有什么错，况且我之前也是这么认为的。而在前端领域内，和编译原理强相关的框架与工具类库主要有这么几种：
+
+- 以 Babel 为代表，主要做 ECMAScript 的语法支持，比如 `?.` 与 `??` 对应的 [babel-plugin-optional-chaining](https://github.com/babel/babel/blob/main/packages/babel-plugin-proposal-optional-chaining) 与 [babel-plugin-nullish-coalescing-operator](https://github.com/babel/babel/blob/main/packages/babel-plugin-proposal-nullish-coalescing-operator)，这一类工具还有 ESBuild 、swc 等。类似的，还有 Scss、Less 这一类最终编译到 CSS 的“超集”。这一类工具的特点是转换前的代码与转换产物实际上是同一层级的，它们的目标是得到标准环境能够运行的产物。
+- 以 Vue、Svelte 还有刚诞生不久的 Astro 为代表，主要做其他自定义文件到 JavaScript（或其他产物） 的编译转化，如 `.vue` `.svelte` `.astro` 这一类特殊的语法。这一类工具的特点是，转换后的代码可能会有多种产物，如 Vue 的 SFC 最终会构建出 HTML、CSS、JavaScript。
+- 典型的 DSL 实现，其没有编译产物，而是由独一的编译引擎消费， 如 GraphQL (`.graphql`)、Prisma (`.prisma`) 这一类工具库（还有更熟悉一些的，如 HTML、SQL、Lex、XML 等），其不需要被编译为 JavaScript，如 `.graphql` 文件直接由 GraphQL 各个语言自己实现的 Engine 来消费。
+- 语言层面的转换，TypeScript、Flow、CoffeeScript 等，以及使用者不再一定是狭义上前端开发者的语言，如张宏波老师的 ReScript（原 BuckleScript）、Dart 等。
+
+无论是哪一种情况，似乎对于非科班前端的同学来说都是地狱难度，但其实社区一直有各种各样的方案，来尝试降低 AST 操作的成本，如 FB 的 [jscodeshift](https://github.com/facebook/jscodeshift)，相对于 Babel 的 Visitor API，jscodeshift 提供了命令式 + 链式调用的 API，更符合前端同学的认知模式（因为就像 Lodash、RxJS 这样），看看它们是怎么用的：
+
+> 示例来自于 [神光](https://www.zhihu.com/people/di-xu-guang-50) 老师的文章。由于本文的重点并不是 jscodeshift 与 gogocode，这里就直接使用现成的示例了。
+
+```javascript
+// Babel
+const { declare } = require("@babel/helper-plugin-utils");
+
+const noFuncAssignLint = declare((api, options, dirname) => {
+  api.assertVersion(7);
+
+  return {
+    pre(file) {
+      file.set("errors", []);
+    },
+    visitor: {
+      AssignmentExpression(path, state) {
+        const errors = state.file.get("errors");
+        const assignTarget = path.get("left").toString();
+        const binding = path.scope.getBinding(assignTarget);
+        if (binding) {
+          if (
+            binding.path.isFunctionDeclaration() ||
+            binding.path.isFunctionExpression()
+          ) {
+            const tmp = Error.stackTraceLimit;
+            Error.stackTraceLimit = 0;
+            errors.push(
+              path.buildCodeFrameError("can not reassign to function", Error)
+            );
+            Error.stackTraceLimit = tmp;
+          }
+        }
+      },
+    },
+    post(file) {
+      console.log(file.get("errors"));
+    },
+  };
+});
+
+module.exports = noFuncAssignLint;
+
+// jscodeshift
+module.exports = function (fileInfo, api) {
+  return api
+    .jscodeshift(fileInfo.source)
+    .findVariableDeclarators("foo")
+    .renameTo("bar")
+    .toSource();
+};
+```
+
+虽然以上并不是同一类操作的对比，但还是能看出来二者 API 风格的差异。
+​
+
+以及 阿里妈妈 的 [gogocode](https://gogocode.io/)，它基于 Babel 封装了一层，得到了类似 jscodeshift 的命令式 + 链式 API，同时其 API 命名也能看出来主要面对的的是编译原理小白，jscodeshift 还有 `findVariableDeclaration` 这种方法，但 gogocode 就完全是 `find` 、`replace` 这种了：
+
+```javascript
+$(code).find("var a = 1").attr("declarations.0.id.name", "c").root().generate();
+```
+
+看起来真的很简单，但这么做也可能会带来一定的问题，为什么 Babel 要采用 Visitor API？类似的，还有 [GraphQL Tools](https://github.com/ardatan/graphql-tools) 中，对 GraphQL Schema 添加 Directive 时同样采用的是 Visitor API，如
+
+```typescript
+import { SchemaDirectiveVisitor } from "graphql-tools";
+
+export class DeprecatedDirective extends SchemaDirectiveVisitor {
+  visitSchema(schema: GraphQLSchema) {}
+  visitObject(object: GraphQLObjectType) {}
+  visitFieldDefinition(field: GraphQLField<any, any>) {}
+  visitArgumentDefinition(argument: GraphQLArgument) {}
+  visitInterface(iface: GraphQLInterfaceType) {}
+  visitInputObject(object: GraphQLInputObjectType) {}
+  visitInputFieldDefinition(field: GraphQLInputField) {}
+  visitScalar(scalar: GraphQLScalarType) {}
+  visitUnion(union: GraphQLUnionType) {}
+  visitEnum(type: GraphQLEnumType) {}
+  visitEnumValue(value: GraphQLEnumValue) {}
+}
+```
+
+Visitor API 是声明式的，我们声明对哪一部分语句做哪些处理，比如我要把所有符合条件 If 语句的判断都加上一个新的条件，然后 Babel 在遍历 AST 时（`@babel/traverse`），发现 If 语句被注册了这么一个操作，那就执行它。
+而 jscodeshift、gogocode 的 Chaining API 则是命令式（Imperative）的，我们需要先获取到 AST 节点，然后对这个节点使用其提供（封装）的 API，这就使得我们很可能遗漏掉一些边界情况而产生不符预期的结果。
+​
+
+而 TypeScript 的 API 呢？TypeScript 的 Compiler API 是绝大部分开放的，足够用于做一些 CodeMod、AST Checker 这一类的工具，如我们使用原生的 Compiler API ，来组装一个函数：
+​
+
+```typescript
+import * as ts from "typescript";
+
+function makeFactorialFunction() {
+  const functionName = ts.factory.createIdentifier("factorial");
+  const paramName = ts.factory.createIdentifier("n");
+  const paramType = ts.factory.createKeywordTypeNode(
+    ts.SyntaxKind.NumberKeyword
+  );
+  const paramModifiers = ts.factory.createModifier(
+    ts.SyntaxKind.ReadonlyKeyword
+  );
+  const parameter = ts.factory.createParameterDeclaration(
+    undefined,
+    [paramModifiers],
+    undefined,
+    paramName,
+    undefined,
+    paramType
+  );
+
+  // n <= 1
+  const condition = ts.factory.createBinaryExpression(
+    paramName,
+    ts.SyntaxKind.LessThanEqualsToken,
+    ts.factory.createNumericLiteral(1)
+  );
+
+  const ifBody = ts.factory.createBlock(
+    [ts.factory.createReturnStatement(ts.factory.createNumericLiteral(1))],
+    true
+  );
+
+  const decrementedArg = ts.factory.createBinaryExpression(
+    paramName,
+    ts.SyntaxKind.MinusToken,
+    ts.factory.createNumericLiteral(1)
+  );
+
+  const recurse = ts.factory.createBinaryExpression(
+    paramName,
+    ts.SyntaxKind.AsteriskToken,
+    ts.factory.createCallExpression(functionName, undefined, [decrementedArg])
+  );
+
+  const statements = [
+    ts.factory.createIfStatement(condition, ifBody),
+    ts.factory.createReturnStatement(recurse),
+  ];
+
+  return ts.factory.createFunctionDeclaration(
+    undefined,
+    [ts.factory.createToken(ts.SyntaxKind.ExportKeyword)],
+    undefined,
+    functionName,
+    undefined,
+    [parameter],
+    ts.factory.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword),
+    ts.factory.createBlock(statements, true)
+  );
+}
+
+const resultFile = ts.createSourceFile(
+  "func.ts",
+  "",
+  ts.ScriptTarget.Latest,
+  false,
+  ts.ScriptKind.TS
+);
+
+const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
+
+const result = printer.printNode(
+  ts.EmitHint.Unspecified,
+  makeFactorialFunction(),
+  resultFile
+);
+
+console.log(result);
+```
+
+以上的代码将会创建这么一个函数：
+
+```typescript
+export function factorial(readonly n: number): number {
+  if (n <= 1) {
+    return 1;
+  }
+  return n * factorial(n - 1);
+}
+```
+
+可以看到，TypeScript Compiler API 属于命令式，但和 jscodeshift 不同，它的 API 不是链式的，更像是组合式的？我们从 identifier 开始创建，组装参数、if 语句的条件与代码块、函数的返回语句，最后通过 `createFunctionDeclaration` 完成组装。简单的看一眼就知道其使用成本不低，你需要对 Expression、Declaration、Statement 等相关的概念有比较清晰地了解，比如上面的 If 语句需要使用哪些 token 来组装，还需要了解 TypeScript 的 AST，如 interface、类型别名、装饰器等（你可以在 [ts-ast-viewer](https://ts-ast-viewer.com/#) 实时的查看 TypeScript AST 结构）。
+​
+
+因此，在这种情况下 [ts-morph](https://ts-morph.com/) 诞生了（原 ts-simple-ast ），它在 TypeScript Compiler API 的基础上做了一层封装，大大降低了使用成本，如上面的例子转换为 ts-morph 是这样的：
+
+```javascript
+import { Project } from "ts-morph";
+
+const s = new Project().createSourceFile("./func.ts", "");
+
+s.addFunction({
+  isExported: true,
+  name: "factorial",
+  returnType: "number",
+  parameters: [
+    {
+      name: "n",
+      isReadonly: true,
+      type: "number",
+    },
+  ],
+  statements: (writer) => {
+    writer.write(`
+if (n <=1) {
+  return 1;
+}
+
+return n * factorial(n - 1);
+    `);
+  },
+}).addStatements([]);
+
+s.saveSync();
+
+console.log(s.getText());
+```
+
+是的，为了避免像 TypeScript Compiler API 那样组装的场景，ts-morph 没有提供创建 IfStatement 这一类语句的 API 或者是相关能力，最方便的方式是直接调用 writeFunction 来直接写入。
+​
+
+很明显，这样的操作是有利有弊的，我们能够在创建 Function、Class、Import 这一类声明时，直接传入其结构即可，但对于函数（类方法）内部的语句，ts-morph 目前的确只提供了这种最简单的能力，这在很多场景下可能确实降低了很多成本，但也注定了无法使用在过于复杂或是要求更严格的场景下。
+​
+
+我在写到这里时突然想到了一个特殊的例子：[Vite](https://github.com/vitejs/vite)，众所周知，Vite 会对依赖进行一次重写，将裸引入（Bare Import）转换为能实际链接到代码的正确导入，如 `import consola from 'consola'` 会被重写为 `import consola from '/node_modules/consola/src/index.js'` （具体路径由 main 指定，对于 esm 模块则会由 module 指定） ，这一部分的逻辑里主要依赖了 `magic-string` 和 `es-module-lexer` 这两个库，通过 `es-module-lexer` 获取到导入语句的标识在整个文件内部的起始位置、结束位置，并通过 `magic-string` 将其替换为浏览器能够解析的相对导入（如 [importAnalysisBuild.ts](https://github.com/vitejs/vite/blob/545b1f13cec069bbae5f37c7540171128f439e7b/packages/vite/src/node/plugins/importAnalysisBuild.ts#L217)）。这也带来了一种新的启发：对于仅关注特定场景的代码转换，如导入语句之于 Vite，装饰器之于 Inversify、TypeDI 这样的场景，大动干戈的使用 AST 就属于杀鸡焉用牛刀了。同样的，在只是对粒度较粗的 AST 节点（如整个 Class 结构）做操作时，ts-morph 也有着奇效。
+​
+实际上可能还是有类似的场景：
+
+- 我只想传入文件路径，然后希望得到这个文件里所有的 class 名，import 语句的标识（如 `fs` 即为 `import fs from 'fs'` 的标识符，也即是 Module Specifier），哪些是具名导入（`import { spawn } from 'child_process'`），哪些是仅类型导入 （`import type { Options } from 'prettier'`），然后对应的做一些操作，ts-morph 的复杂度还是超出了我的预期。
+- 我想学习编译相关的知识，但我不想从教科书和系统性的课程开始，就是想直接来理论实践，看看 AST 操作究竟是怎么能玩出花来，这样说不定以后学起来我更感兴趣？
+- 我在维护开源项目，准备发一个 Breaking Change，我希望提供 CodeMod，帮助用户直接升级到新版本代码，常用的操作可能有更新导入语句、更新 JSX 组件属性等。或者说在脚手架 + 模板的场景中，我有部分模板只存在细微的代码差异，又不想维护多份文件，而是希望抽离公共部分，并通过 AST 动态的写入特异于模板的代码。但是！我没有学过编译原理！也不想花时间把 ts-morph 的 API 都过一下...​
+
+做了这么多铺垫，是时候迎来今天的主角了，[@ts-morpher](https://ts-morpher.vercel.app/) 基于 ts-morph 之上又做了一层额外封装，如果说 TypeScript Compiler API 的复杂度是 10，那么 ts-morph 的复杂度大概是 4，而 @ts-morpher 的复杂度大概只有 1 不到了。作为一个非科班、没学过编译原理、没玩过 Babel 的前端仔，它是我在需要做 AST Checker、CodeMod 时产生的灵感。
+
+我们知道，AST 操作通常可以很轻易的划分为多个单元（如果你之前不知道，恭喜你现在知道了），比如获取节点-检查节点-修改节点 1-修改节点 2-保存源文件，这其中的每一个部分都是可以独立拆分的，如果我们能像 Lodash 一样调用一个个职责明确的方法，或者像 RxJS 那样把一个个操作符串（pipe）起来，那么 AST 操作好像也没那么可怕了。
+可能会有同学说，为什么要套娃？一层封一层？那我只能说，管它套娃不套娃呢，好用就完事了，什么 Declaration、Statement、Assignment...，我直接统统摁死，比如像这样（更多示例请参考官网）：
+
+```typescript
+import { Project } from "ts-morph";
+import path from "path";
+import fs from "fs-extra";
+import { createImportDeclaration } from "@ts-morpher/creator";
+import { checkImportExistByModuleSpecifier } from "@ts-morpher/checker";
+import { ImportType } from "@ts-morpher/types";
+
+const sourceFilePath = path.join(__dirname, "./source.ts");
+
+fs.rmSync(sourceFilePath);
+fs.ensureFileSync(sourceFilePath);
+
+const p = new Project();
+const source = p.addSourceFileAtPath(sourceFilePath);
+
+createImportDeclaration(source, "fs", "fs-extra", ImportType.DEFAULT_IMPORT);
+
+createImportDeclaration(source, "path", "path", ImportType.NAMESPACE_IMPORT);
+
+createImportDeclaration(
+  source,
+  ["exec", "execSync", "spawn", "spawnSync"],
+  "child_process",
+  ImportType.NAMED_IMPORT
+);
+
+createImportDeclaration(
+  source,
+  // First item will be regarded as default import, and rest will be used as named imports.
+  ["ts", "transpileModule", "CompilerOptions", "factory"],
+  "typescript",
+  ImportType.DEFAULT_WITH_NAMED_IMPORT
+);
+
+createImportDeclaration(
+  source,
+  ["SourceFile", "VariableDeclarationKind"],
+  "ts-morph",
+  ImportType.NAMED_IMPORT,
+  true
+);
+```
+
+这一连串的方法调用会创建：
+
+```typescript
+import fs from "fs-extra";
+import * as path from "path";
+import { exec, execSync, spawn, spawnSync } from "child_process";
+import ts, { transpileModule, CompilerOptions, factory } from "typescript";
+import type { SourceFile, VariableDeclarationKind } from "ts-morph";
+```
+
+再看一个稍微复杂点的例子：
+
+```typescript
+import { Project } from "ts-morph";
+import path from "path";
+import fs from "fs-extra";
+import {
+  createBaseClass,
+  createBaseClassProp,
+  createBaseClassDecorator,
+  createBaseInterfaceExport,
+  createImportDeclaration,
+} from "@ts-morpher/creator";
+import { ImportType } from "@ts-morpher/types";
+
+const sourceFilePath = path.join(__dirname, "./source.ts");
+
+fs.rmSync(sourceFilePath);
+fs.ensureFileSync(sourceFilePath);
+
+const p = new Project();
+const source = p.addSourceFileAtPath(sourceFilePath);
+
+createImportDeclaration(
+  source,
+  ["PrimaryGeneratedColumn", "Column", "BaseEntity", "Entity"],
+  "typeorm",
+  ImportType.NAMED_IMPORTS
+);
+
+createBaseInterfaceExport(
+  source,
+  "IUser",
+  [],
+  [],
+  [
+    {
+      name: "id",
+      type: "number",
+    },
+    {
+      name: "name",
+      type: "string",
+    },
+  ]
+);
+
+createBaseClass(source, {
+  name: "User",
+  isDefaultExport: true,
+  extends: "BaseEntity",
+  implements: ["IUser"],
+});
+
+createBaseClassDecorator(source, "User", {
+  name: "Entity",
+  arguments: [],
+});
+
+createBaseClassProp(source, "User", {
+  name: "id",
+  type: "number",
+  decorators: [{ name: "PrimaryGeneratedColumn", arguments: [] }],
+});
+
+createBaseClassProp(source, "User", {
+  name: "name",
+  type: "string",
+  decorators: [{ name: "Column", arguments: [] }],
+});
+```
+
+这些代码将会创建：
+
+```typescript
+import { PrimaryGeneratedColumn, Column, BaseEntity, Entity } from "typeorm";
+
+export interface IUser {
+  id: number;
+
+  name: string;
+}
+
+@Entity()
+export default class User extends BaseEntity implements IUser {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+}
+```
+
+​
+
+其实本质上没有什么复杂的地方，就是将 ts-morph 的链式 API 封装好了针对于常用语句类型的增删改查方法：
+
+- 目前支持了 Import、Export、Class，下一个支持的应该会是 JSX(TSX)。
+- @ts-morpher 将增删改查方法拆分到了不同的 package 下，如 `@ts-morpher/helper` 中的方法均用于获取声明或声明 Identifier ，如你可以获取一个文件里所有的导入的 Module Specifier（`fs` 之于 `import fsMod from 'fs'`），也可以获取所有导入的声明，但是你不用管这个声明长什么样，直接扔给 `@ts-morpher/checker` ，调用 `checkImportType `，看看这是个啥类型导入。
+
+​
+
+为什么我要搞这个东西？因为在我目前的项目中需要做一些源码级的约束，如我想要强制所有主应用与子应用的入口文件，都导入了某个新的 SDK，如 `import 'foo-error-reporter'` ，如果没有导入的话，那我就给你整一个！由于不是所有子应用、主应用都能纳入管控，因此就需要这么一个究极强制卡口来放到 CI 流水线上。如果这样的话，那么用 ts-morph 可能差不多够了，诶，不好意思，我就是觉得 AST 操作还可以更简单一点，干脆自己再搞一层好了。
+​
+
+是的，这篇文章的本质是一篇 PR 文，为了安利下新玩具，但说是玩具并不是用不了，它也有着 100% 的单测覆盖率和 100+ 方法，而是说它还没有达到理想状态，比如把 AST 操作的复杂度降到 0.5 以下，这一点我想可以通过提供可视化的 playground，让你点击按钮来调用方法，同时实时的预览转换结果，还可以在这之上组合一些常见的能力，如合并两个文件的导入语句，批量更改 JSX 组件等等。
+​
+
+虽然它是一篇 PR 文，~~但还是有那么一点干货的~~，这也是我从零折腾 AST 一个月来的些许收获，希望你能有所收获~
