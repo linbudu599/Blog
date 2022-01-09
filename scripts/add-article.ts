@@ -11,13 +11,7 @@ interface IOption {
 const parsed = parse(process.argv.slice(2)) as unknown as IOption;
 
 const mdxInitialContent = ({ title, date, slug }: IOption): string => {
-  return `
----
-title: "${title}"
-date: ${date}
-slug: "/${slug}"
----
-`;
+  return `---\ntitle: "${title}"\ndate: ${date}\nslug: "/${slug}"\n---\n\n`;
 };
 
 const composeTargetPath = (slug: string) => {
