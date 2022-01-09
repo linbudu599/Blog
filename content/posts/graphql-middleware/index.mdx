@@ -1,0 +1,420 @@
+---
+title: "探索 GraphQL Resolver 的中间件"
+date: 2021-01-09
+slug: "/graphql-middleware"
+---
+
+在 GraphQL 中，Resolver 的存在类似于 RESTFul API 中的 Controller 层级，这一点在 NestJS、MidwayJS 等提供了 `@Controller` 装饰器的 Node 框架中更为明显。以 Midway Koa 为例，其洋葱中间件模型能够对请求以及响应进行篡改，一个简单的示例是这样的：
+
+```typescript
+import { Provide } from "@midwayjs/decorator";
+import {
+  IWebMiddleware,
+  IMidwayKoaContext,
+  IMidwayKoaNext,
+} from "@midwayjs/koa";
+
+@Provide()
+export class ReportMiddleware implements IWebMiddleware {
+  resolve() {
+    return async (ctx: IMidwayKoaContext, next: IMidwayKoaNext) => {
+      const startTime = Date.now();
+      await next();
+      console.log(Date.now() - startTime);
+    };
+  }
+}
+```
+
+说到这里，我们知道 Koa 和 Express 的中间件模型是不同的，Koa 的中间件按照注册顺序，以 中间件 1 进-中间件 2 进-中间件 2 出-中间件 1 出 的顺序执行，而 Express 则简单的按注册顺序依次执行，且通常由最后一个中间件负责响应请求。
+
+那 GraphQL 中是否能够做到中间件，对应的在 Resolver 的前后执行？当然是可以的，而且也比较简单，我们知道 GraphQL Schema 中 Resolver 是这样存储的（如果你之前不知道，恭喜你现在知道了）：
+
+```typescript
+export declare class GraphQLSchema {
+  description: Maybe<string>;
+  getTypeMap(): TypeMap;
+  // ... 其他无关的定义
+}
+
+declare type TypeMap = ObjMap<GraphQLNamedType>;
+
+// GraphQLObjectType 是 GraphQLNamedType 的子类型之一
+export declare class GraphQLObjectType<TSource = any, TContext = any> {
+  name: string;
+  description: Maybe<string>;
+  getFields(): GraphQLFieldMap<TSource, TContext>;
+}
+
+export declare type GraphQLFieldMap<TSource, TContext> = ObjMap<
+  GraphQLField<TSource, TContext>
+>;
+
+export interface GraphQLField<TSource, TContext, TArgs = any> {
+  name: string;
+  description: Maybe<string>;
+  type: GraphQLOutputType;
+  // 就是这儿！
+  resolve?: GraphQLFieldResolver<TSource, TContext, TArgs>;
+}
+```
+
+沿着类型找下来我们发现 Resolver 被定义在 GraphQL Field 上，也即意味着当我们使用以下方式定义 Resolver 时：
+
+```typescript
+const resolvers: IResolvers = {
+  Query: {
+    hello: (root, args, context, info) => {
+      return `Hello ${args.name ? args.name : "world"}!`;
+    },
+    bye: (root, args, context, info) => {
+      return `Bye ${args.name ? args.name : "world"}!`;
+    },
+  },
+};
+```
+
+顶级对象类型 Query 的 Field：hello、bye 会被分别的绑定上这里对应的函数，再看 GraphQL 源码中的执行逻辑（精简版），见[execute.ts](https://github.com/graphql/graphql-js/blob/main/src/execution/execute.ts#L483)：
+
+```javascript
+function executeField(): PromiseOrValue<unknown> {
+  const fieldDef = getFieldDef(exeContext.schema, parentType, fieldNodes[0]);
+
+  const resolveFn = fieldDef.resolve ?? exeContext.fieldResolver;
+
+  try {
+    const contextValue = exeContext.contextValue;
+    const result = resolveFn(source, args, contextValue, info);
+  } catch (rawError) {}
+}
+```
+
+可以看到，Resolver 的执行实际上就是将 GraphQL 提案中要求的参数传入函数中：
+
+- source，上一级 Field Resolver 的处理信息，对于顶级 Resolver ，ApolloServer 这一类 GraphQL Server 框架中提供了一个额外的 rootValue 作为其 source，同时在 Apollo 中此参数被命名为 parent。
+- args，当前 Field 所需的参数，从 Operation 解析而来。
+- context，被所有层级的 Resolver 共享的值，一般用于鉴权、DataLoader 注册、埋点等。
+- info，本次 operation 专有的信息，需要通过另一个方法 `buildResolveInfo` 拼装，具体信息参看 [definition.ts](https://github.com/graphql/graphql-js/blob/main/src/type/definition.ts#L974)
+
+这也就说明了 Resolver 并没有什么特别的，我们需要做的只是拿到这个函数本身的定义以及入参，然后在执行前后分别执行一个中间件函数即可。并且，由于能够拿到有哪些 Type、Field，我们可以很容易的控制中间件的应用级别，如默认全局生效、仅对某一 field （不）生效，仅对顶级 Field 生效，等等，类比过来就是 Midway 中的全局中间件、路由中间件等概念。
+
+确定了实现可能性以后，我们期望的中间件应该是这样的：
+
+```typ
+const middleware1 = (rawResolver, source, args, context, info) => {
+	 console.log('In!');
+  const result = await rawResolver(root, args, context, info);
+  console.log('Out!');
+  return result;
+}
+```
+
+中间件的注册也应当从简，直接传入 GraphQL Schema 与中间件即可：
+
+```typescript
+const middlewareRegisteredSchema = applySchema(rawSchema, middleware1, middleware2, ...);
+```
+
+> rawSchema 意为着你需要提前构建一次 Schema，如 `@graphql-tools/schema` 提供的 `makeExecutableSchema` 或 `TypeGraphQL` 提供的 `buildSchemaSync` 以及其他类似的工具。
+
+在 applySchema 方法中，我们首先遍历中间件数组，为每一个中间件执行一次注册。这里需要注意的是，我们期望的顺序是类似 Koa 的洋葱模型，即 mw1 进-mw2 进-实际逻辑-mw2 出-mw1 出 的顺序，所以在注册时位置靠后的中间件反而需要仙先被注册，来确保其位于中间件队列内侧，我们可以很简单的使用 reduceRight 方法实现：
+
+```typescript
+export const applyMiddleware = <TSource = any, TContext = any, TArgs = any>(
+  schema: GraphQLSchema,
+  ...middlewares: IMiddlewareResolver<TSource, TContext, TArgs>[]
+): GraphQLSchema => {
+  const modifiedSchema = middlewares.reduceRight(
+    (prevSchema, middleware) =>
+      attachSingleMiddlewareToSchema(prevSchema, middleware),
+    schema
+  );
+
+  return modifiedSchema;
+};
+```
+
+我们需要在 `attachSingleMiddlewareToSchema` 方法中完成中间件的注册，这一步我们需要：
+
+- 对 Query 以及 Mutation（Subscription 也一样，但为了精简这里不做实现），拿到其所有的 Field，篡改每一个 Field 的 Resolver
+- 将新的 Resolver 添加回 Schema，这里我们使用 `@graphql-tools/schema` 的 `addResolversToSchema ` 方法来进行
+
+```typescript
+const attachSingleMiddlewareToSchema = <
+  TSource = any,
+  TContext = any,
+  TArgs = any
+>(
+  schema: GraphQLSchema,
+  middleware: IMiddlewareResolver<TSource, TContext, TArgs>
+): GraphQLSchema => {
+  const typeMap = schema.getTypeMap();
+
+  const modifiedResolvers: IResolvers = Object.keys(typeMap)
+    .filter((type) => ["Query", "Mutation"].includes(type))
+    .reduce(
+      (resolvers, type) => ({
+        ...resolvers,
+        [type]: attachSingleMiddlewareToObjectType(
+          typeMap[type] as GraphQLObjectType,
+          middleware
+        ),
+      }),
+      {}
+    );
+
+  const modifiedSchema = addResolversToSchema({
+    schema,
+    resolvers: modifiedResolvers,
+    updateResolversInPlace: false,
+    resolverValidationOptions: {
+      requireResolversForResolveType: "ignore",
+    },
+  });
+
+  return modifiedSchema;
+};
+```
+
+通过 `updateResolversInPlace` 以及 `resolverValidationOptions` 参数，我们确保了原有的 Resolver 会被覆盖掉。
+
+然后就是最重要 `attachSingleMiddlewareToObjectType` 方法了，在这里我们要拿到 ObjectType 上的所有 GraphQL Field 并依次的去修改它们的 resolve 属性：
+
+```typescript
+const attachSingleMiddlewareToObjectType = <
+  TSource = any,
+  TContext = any,
+  TArgs = any
+>(
+  type: GraphQLObjectType<TSource, TContext>,
+  middleware: IMiddlewareResolver<TSource, TContext, TArgs>
+): IResolvers<TSource, TContext> => {
+  const fieldMap = type.getFields();
+
+  const modifiedFieldResolvers: IResolvers<TSource, TContext> = Object.keys(
+    fieldMap
+  ).reduce((resolvers, fieldName) => {
+    const currentField = fieldMap[fieldName];
+    // @ts-expect-error
+    const { isDeprecated, ...rest } = currentField;
+
+    const argsMap = currentField.args.reduce(
+      (acc, cur) => ({
+        ...acc,
+        [cur.name]: cur,
+      }),
+      {} as Record<string, GraphQLArgument>
+    );
+
+    const parsedField = {
+      ...rest,
+      args: argsMap,
+    };
+
+    const modifiedFieldData =
+      parsedField.resolve && parsedField.resolve !== defaultFieldResolver
+        ? {
+            ...parsedField,
+            resolve: wrapResolverInMiddleware(parsedField.resolve, middleware),
+          }
+        : { ...parsedField, resolve: defaultFieldResolver };
+
+    return {
+      ...resolvers,
+      [fieldName]: modifiedFieldData,
+    };
+  }, {});
+  return modifiedFieldResolvers;
+};
+```
+
+- 在 GraphQL16 以前的版本使用 `isDeprecated` 标识 Field Deprecation，在以后使用 `deprecationReason` 标识
+- 将 args 属性由 `GraphQLArgument[]`（只读） 转换为 `Record<string, GraphQLArgument>`，这一点是因为在 GraphQL 实际将 args 传入给 Resolver 时也会有这么一个步骤，因此提前在这里做好确保中间件和原 Resolver 拿到的是一致的形式。
+- 如果 Field 没有定义 Resolver，或使用了默认的内置 Resolver （此默认 Resolver 会直接从 source 上读取一个键名与此 Field 相同的键值返回），那么我们不做中间件的处理，直接返回，否则我们使用 `wrapResolverInMiddleware` 来完成临门一脚：中间件的注入。
+
+最后的 `wrapResolverInMiddleware` 则是一个简单的高阶函数：
+
+```typescript
+function wrapResolverInMiddleware<TSource, TContext, TArgs>(
+  resolver: GraphQLFieldResolver<TSource, TContext, TArgs>,
+  middleware: IMiddlewareResolver<TSource, TContext, TArgs>
+): GraphQLFieldResolver<TSource, TContext, TArgs> {
+  return (parent, args, ctx, info) =>
+    middleware(
+      (_parent = parent, _args = args, _ctx = ctx, _info = info) =>
+        resolver(_parent, _args, _ctx, _info),
+      parent,
+      args,
+      ctx,
+      info
+    );
+}
+```
+
+来实际使用下，用 ApolloServer 起一个简单的 GraphQL Server：
+
+```typescript
+import { ApolloServer } from "apollo-server";
+import { makeExecutableSchema } from "@graphql-tools/schema";
+import { applyMiddleware } from "./graphql-middleware-core/core";
+import type { IMiddleware, IResolvers } from "./graphql-middleware-core/core";
+
+const typeDefs = `
+type Query {
+  hello(name: String): String
+}
+`;
+
+const resolvers: IResolvers = {
+  Query: {
+    hello: (root, args, context, info) => {
+      console.log(`3. Core: resolver: hello`);
+      return `Hello ${args.name ? args.name : "world"}!`;
+    },
+  },
+};
+
+const logInput: IMiddleware = async (resolve, root, args, context, info) => {
+  console.log(`1. logInput Start: ${JSON.stringify(args)}`);
+  const result = await resolve(root, args, context, info);
+  console.log(`5. logInput End`);
+  return result;
+};
+
+const logResult: IMiddleware = async (resolve, root, args, context, info) => {
+  console.log(`2. logResult Start`);
+  const result = await resolve(root, args, context, info);
+  console.log(`4. logResult End: ${JSON.stringify(result)}`);
+  return result;
+};
+
+const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+const schemaWithMiddleware = applyMiddleware(schema, logInput, logResult);
+
+const server = new ApolloServer({
+  schema: schemaWithMiddleware,
+});
+
+(async () => {
+  await server.listen({ port: 8008 });
+
+  console.log(`http://localhost:8008`);
+})();
+```
+
+我们注册了两个简单的中间件，logInput 打印入参、logResult 打印结果，并期望最终的打印结果按照序号顺序，在 GraphQL Playground 或 Apollo Studio 中使用以下语句发起请求：
+
+```gql
+query TestQuery {
+  hello
+}
+```
+
+控制台打印结果：
+
+```
+1. logInput Start: {}
+2. logResult Start
+3. Core: resolver: hello
+4. logResult End: "Hello world!"
+5. logInput End
+```
+
+可以看到我们预期的结果已经生效了。
+
+实际上，以上这些处理逻辑是 [graphql-middleware](https://github.com/maticzav/graphql-middleware) 的核心逻辑，这个库同时也是 [ graphql-shield](https://github.com/maticzav/graphql-shield) [graphql-middleware-apollo-upload-server](https://github.com/maticzav/graphql-middleware-apollo-upload-server) 等提供特定部分的功能如鉴权、上传、日志等的 GraphQL Middleware 的基础库。
+
+如果说，GraphQL Middleware 提供了自由的中间件注册逻辑，你只要传递合法的 GraphQL Schema 即可，无论你使用什么工具来构建。我们在上面说到 TypeGraphQL 也提供了构建 Schema 的 API `buildSchema`，实际上它本身就提供了中间件相关的功能。
+
+使用 TypeGraphQL ，我们可以使用 Class 以及 Decorator 语法来描述 GraphQL Schema，如以下的 GraphQL Schema
+
+```typescript
+type Recipe {
+  id: ID!
+  title: String!
+  description: String
+  creationDate: Date!
+  ingredients: [String!]!
+}
+```
+
+对应的 Class 代码：
+
+```typescript
+@ObjectType()
+class Recipe {
+  @Field((type) => ID)
+  id: string;
+
+  @Field()
+  title: string;
+
+  @Field({ nullable: true })
+  description?: string;
+
+  @Field()
+  creationDate: Date;
+
+  @Field((type) => [String])
+  ingredients: string[];
+}
+```
+
+对应的 Resolver 代码：
+
+```typescript
+@Resolver()
+class RecipeResolver {
+  @Query((returns) => [Recipe])
+  async recipes(): Promise<Recipe[]> {
+    // ...
+  }
+}
+```
+
+声明一个中间件并添加：
+
+```typescript
+export const ResolveTime: MiddlewareFn = async ({ info }, next) => {
+  const start = Date.now();
+  await next();
+  const resolveTime = Date.now() - start;
+  console.log(`${info.parentType.name}.${info.fieldName} [${resolveTime} ms]`);
+};
+
+@Resolver()
+export class RecipeResolver {
+  @Query()
+  @UseMiddleware(ResolveTime)
+  randomValue(): number {
+    return Math.random();
+  }
+}
+```
+
+这样 `ResolveTime` 即在 `RecipeResolver.randomValue` 上生效了。事实上我们甚至可以直接定义在 ObjectType Class 中，这样所有涉及到此 Field 的属性都会生效：
+
+```typescript
+@ObjectType()
+export class Recipe {
+  @Field((type) => [Int])
+  @UseMiddleware(LogAccess)
+  ratings: number[];
+}
+```
+
+TypeGraphQL 也支持全局的中间件的形式，类似的，我们需要对完整的 GraphQL Schema 做修改，在这里则发生在 `buildSchema` 中：
+
+```typescript
+const schema = await buildSchema({
+  resolvers: [RecipeResolver],
+  globalMiddlewares: [ErrorInterceptor, ResolveTime],
+});
+```
+
+TypeGraphQL 中的中间件很明显比 graphql-middleware 在功能上强大的多，但由于后者实际上提供的是抽象的、工具无关的中间件注册能力，所以比较实际上并没有什么意义。
+
+在下一篇 GraphQL 的文章中，我们会来聊一聊 GraphQL Diretives，从它的实现、使用、原理，以及和本文中 GraphQL Middleware 的全方位对比。
+
+全文完，感谢你的阅读~
