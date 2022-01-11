@@ -1,6 +1,6 @@
 import * as fs from "fs-extra";
 import * as path from "path";
-import * as parse from "yargs-parser";
+import parse from "yargs-parser";
 
 interface IOption {
   slug: string;
