@@ -435,10 +435,10 @@ type Getter<T> = () => T;
 type Setter<T> = (value: T) => void;
 ```
 
-- Getter<Animal> 与 Getter<Dog> 之间的类型兼容性是如何的？
-- Setter<Animal> 与 Setter<Dog> 之间的类型兼容性是如何的？
+- `Getter<Animal>` 与 `Getter<Dog>` 之间的类型兼容性是如何的？
+- `Setter<Animal>` 与 `Setter<Dog>` 之间的类型兼容性是如何的？
 
-如果 `Getter<Dog> ≼ Getter<Animal> `成立（`A ≼ B` 表示 A 是 B 的子类型），由于函数的返回值遵循协变（**_covariance_**），我们知道只需要 `Dog ≼ Animal` 成立即可，而这很明显是成立的。
+如果 `Getter<Dog> ≼ Getter<Animal>` 成立（`A ≼ B` 表示 A 是 B 的子类型），由于函数的返回值遵循协变（**_covariance_**），我们知道只需要 `Dog ≼ Animal` 成立即可，而这很明显是成立的。
 
 如果 `Setter<Dog> ≼ Setter<Animal>` 成立，函数的参数类型遵循逆变（**_contravariance_**），需要 `Animal ≼ Dog` 成立，而这很明显是不行的。
 
